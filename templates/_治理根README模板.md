@@ -1,4 +1,4 @@
-# 治理根 README 模板 → `docs/governance/README.md` 【必选】
+# 治理根 README 模板 → `<GOV_ROOT>/README.md` 【必选】
 
 > **它是整个体系的入口** —— 新会话读到的**第一份活文档**。
 > 它的唯一职责：**告诉人从哪开始读、按什么顺序读**。

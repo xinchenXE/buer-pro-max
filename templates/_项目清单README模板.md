@@ -1,4 +1,4 @@
-# 项目清单 README 模板 → `docs/governance/项目清单/README.md` 【必选】
+# 项目清单 README 模板 → `<GOV_ROOT>/项目清单/README.md` 【必选】
 
 > 回答一个问题：**「这个项目里有什么？」**
 >

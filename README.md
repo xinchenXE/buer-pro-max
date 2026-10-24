@@ -45,7 +45,7 @@ Copy-Item -Recurse -Force buer-pro-max "$env:USERPROFILE\.claude\skills\buer-pro
 > 只有**维护它自己**时才需要 Python 3 跑 `scripts/selfcheck.py`。
 
 > **产物不依赖 Claude Code**（skill 本身是 Claude Code 格式的，这一条要说清）：
-> 本 skill 的**产物**是写进 `AGENTS.md` 的宪法段 + `docs/governance/` 文档树，
+> 本 skill 的**产物**是写进 `AGENTS.md` 的宪法段 + `<GOV_ROOT>/` 文档树，
 > 两者都是纯文本。任何读 `AGENTS.md` 约定的工具（Codex / Cursor / 其他 agent）都能吃到同一份规则。
 > **注意区分**：产物跨工具通用 ✅；**读取这个 skill 的入口**（`SKILL.md`）是 Claude Code 的目录约定 ❌。
 
@@ -63,7 +63,7 @@ Copy-Item -Recurse -Force buer-pro-max "$env:USERPROFILE\.claude\skills\buer-pro
    探不到的**才问用户**（五条提问，见下）。
 2. **判档**：五档 —— 微型 / 轻量 / 标准 / 完整 / 重型。**宁可先低一档** ——
    框架可以长上去，多余的容器只会变成噪音。
-3. **生成**：`docs/governance/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
+3. **生成**：`<GOV_ROOT>/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
 
 **五档速查**（完整判据与升降档信号见 `references/tier-selection.md`）：
 
@@ -132,7 +132,7 @@ buer-pro-max/
 ├── references/
 │   ├── due-diligence.md           ← 尽调清单（命令 + 问用户的原始问题）
 │   ├── tier-selection.md          ← 五档判据 + 项目画像 + 升降档信号 + 重型档三机制 ★
-│   ├── anti-patterns.md           ← 17 条踩过的坑，每条带「为什么需要它」原话 ★
+│   ├── anti-patterns.md           ← 20 条踩过的坑，每条带「为什么需要它」原话 ★
 │   ├── session-handoff.md         ← 会话交接机制
 │   ├── tool-contracts.md          ← 门禁脚本的契约（不打包脚本，但给实现规格）
 │   ├── mandatory-vs-optional.md   ← **哪些必选、哪些可选**（生成时按它裁剪）★
@@ -151,7 +151,7 @@ buer-pro-max/
 │       ├── gates-and-holds.md     ← 门禁表 + 硬停清单
 │       └── doc-sync-discipline.md ← 文档同步纪律
 ├── templates/                     ← 23 份模板，按 SKILL.md §三 的生成树对号入座
-│   ├── _治理根README模板.md         ← ★ docs/governance/README.md（入口）
+│   ├── _治理根README模板.md         ← ★ <GOV_ROOT>/README.md（入口）
 │   ├── _工作范式模板.md             ← ★★ 规则的权威载体
 │   ├── _宪法段模板.md               ← ★ 写进 AGENTS.md 的那一段
 │   ├── _项目清单README模板.md
@@ -206,7 +206,7 @@ buer-pro-max/
 
 `AGENTS.md` 是跨工具的事实约定（Codex / Cursor / 其他 agent 都读它）。
 写进 `AGENTS.md` 的规则，**换工具也不会丢**。
-（同理，`docs/governance/` 里的全部内容是纯 Markdown，不依赖任何特定 agent。）
+（同理，`<GOV_ROOT>/` 里的全部内容是纯 Markdown，不依赖任何特定 agent。）
 
 ### 3. 「任意项目通用」是靠**拆两层**做到的，不是靠删条款
 
@@ -236,13 +236,13 @@ buer-pro-max/
 你：给这个项目建立治理框架
 skill：（尽调）目录里只有 cli.py 一个源文件，140 行，没有 .git，没有测试…
         判档：微型档（1–2 个源文件 / 不打算回来维护）
-        → 按 SKILL.md §三：「微型档只生成一份 NEXT.md，不生成 docs/governance/」
+        → 按 SKILL.md §三：「微型档只生成一份 NEXT.md，不生成 <GOV_ROOT>/」
 你的产物：
 
   <项目根>/NEXT.md        ← 约 15 行，三节：下一步 / 已决定 / 坑
 ```
 
-**没有 `docs/governance/`，没有 `AGENTS.md` 宪法段，没有队列、没有台账、没有快照。**
+**没有 `<GOV_ROOT>/`，没有 `AGENTS.md` 宪法段，没有队列、没有台账、没有快照。**
 这不是它偷懒 —— 是它的核心判断：**在这个规模上装治理只有坏处**
 （你会填一份没人读的模板，而那份模板的存在会让你以为自己有治理）。
 
@@ -259,7 +259,7 @@ skill：（尽调）目录里只有 cli.py 一个源文件，140 行，没有 .g
 skill：（尽调）探到 Node + pnpm，有 .git，无 submodule，src/ 4.2k 行…
         探不到的问你这四条提问
 你：不许改 vendor/ 和 dist/；回滚靠 git；只有我拍板；最怕改了不该改的
-skill：（生成）docs/governance/ 全套 + AGENTS.md 宪法段
+skill：（生成）<GOV_ROOT>/ 全套 + AGENTS.md 宪法段
         门禁表填的是你 package.json 里真实存在的 lint/test/build
         vendor/ 与 dist/ 进了只读名单与硬停清单
 ```
@@ -268,7 +268,7 @@ skill：（生成）docs/governance/ 全套 + AGENTS.md 宪法段
 
 ```
 你：登记一个问题 —— 分页在空列表时会返回 NaN
-skill：在 docs/governance/问题记录/ 建 ISS-001-….md，并在队列总表更新计数
+skill：在 <GOV_ROOT>/问题记录/ 建 ISS-001-….md，并在队列总表更新计数
 
 你：派发它
 skill：把队列项移动到活跃计划/、改名、追加「派发补充」节（含执行顺序与硬停）
@@ -284,7 +284,7 @@ skill：走完成宣告 N 步 —— 勾选计划、追加轮次章节、更新�
 
 - **它不能替你做决定。** 框架的价值是让「谁有权决定什么」变得明确，
   不是替项目所有者拍板研究性/取舍性问题。
-- **它对该不装的项目会说"别装"。** 判出**微型档**时，它**不生成 `docs/governance/`**，
+- **它对该不装的项目会说"别装"。** 判出**微型档**时，它**不生成 `<GOV_ROOT>/`**，
   只给一份约 15 行的 `NEXT.md` —— 因为给这个规模装治理**只有坏处**。
 - **它的门禁需要目标项目自己的实现。** 生成的是**表**与**判据**，
   具体脚本要么项目已有，要么得自己写。
@@ -350,6 +350,7 @@ skill：走完成宣告 N 步 —— 勾选计划、追加轮次章节、更新�
 
 | 版本 | 日期 | 改了什么 |
 |---|---|---|
+| **1.4.0** | 2026-10-24 | **端到端试跑后的结构性修复。** 在真实项目上跑了一次完整初始化，曝露并修掉 6 类缺陷：<br>· **P0-1** 治理根路径可配置：引入 `<GOV_ROOT>` 占位符（22 个文件 / 56 处硬编码→占位符），默认值只在 `SKILL.md` §3.0 定义一次<br>· **P0-2** 生成树逐行加档位标记（`{ 标准起 }` 等 8 种）—— 修复「标准档被误生成丢弃/偏差/操作容器」<br>· **P1-3** 新增 §1.3 生成前强制门（6 项勾选）—— 把「推荐项必须在初始化前说明」从一句规则变成一个动作<br>· **P1-5** 交接件口径统一：`tier-selection.md` 档位表里的「每轮一份」→「【推荐项】」<br>· **P2-7** 新增「冲突裁决」节：目标项目的明确禁令 vs 本框架默认门禁的处理顺序<br>· **修正** 宪法段与工作范式的**优先级方向相反**（宪法段写「以本节为准」，工作范式写「以本文件为准」）<br>· **新门 2 道** `gov-root-literal`（治理根不得写死）+ `tree-tier-markers`（树的档位标记合法且不少于 8 个），14 道门全绿，**新门均做牙齿验证**<br>· **anti-patterns 新增 #18 #19 #20**：把布局当常量 / 两张表无机械校验 / 把「应该」写成规则没写成动作 |
 | **1.3.2** | 2026-10-24 | **自检修复。** <br>· `bom-and-eol` 会去读 `.git/objects/**/*.pack`（二进制，必然含 CRLF 字节）→ **全新克隆上必然误报**。这洞是**验证推送结果时**被真实发现的（本地仓库没有 pack 文件时不显形）<br>· 修复：`walk_all()` / `walk_md()` 跳过 `.git` / `__pycache__` / `node_modules` / `.venv` / `venv`<br>· 已做牙齿验证：在假 `.git` 里塞含 CRLF 的 pack，门不再报警 |
 | **1.3.1** | 2026-10-24 | **F9 补完（shell 兼容）。** 派发件原定「本批只做机械半边」，经裁决补完：<br>· `due-diligence.md` 新增 **§一.0 「先确认你在哪个 shell」** —— `uname -s` 预检 + **POSIX → PowerShell 替换表**（13 条，含 `2>/dev/null` 会造怪文件的陷阱）+ 「换 shell 就换整套命令」两条硬规矩<br>· `SKILL.md §一` 加指针，提醒 Windows 上先看预检<br>· **立场**：**优先 git-bash**（唯一能保证与命令逐字一致），替换表只作兜底 |
 | **1.3.0** | 2026-10-24 | **发布前修复 · 第一批。** 修客观缺陷 + 对齐官方 Agent Skills 规范：<br>· **F1** frontmatter 规范化为 `name`/`description`/`license`/`compatibility`/`metadata`，`version` 移入 `metadata`<br>· **F2** 删掉「**前** 6 条进宪法」的误述（摘要六条并非 #1–#6），补来源编号对照<br>· **F3** 删掉全库唯一一处真行号引用，改为按节名引用<br>· **F4** `selfcheck.py` 9 → 12 门：中文路径可见、围栏外泄漏、双向目录树、计数漂移、真行号引用、BOM/行尾；全部门做过牙齿验证<br>· **F5** 修 `_尽调结论模板.md` 嵌套围栏（内层提前闭合，命令输出段掉到块外）<br>· **F6** 删掉 `due-diligence.md` 那份 3/5 档的重复档位表，改为指向唯一权威<br>· **F7** 删掉 `due-diligence.md` 与 `tier-selection.md` 的两处内联副本<br>· **F8** 清掉本机专属事实（宿主项目路径、旧的多副本同步叙事、具体备份介质）<br>· **F9** 加 `compatibility` 声明；`find` 命令统一加括号<br>· **P2** 12 条机械项：安装命令、运行期/维护期依赖、模板版本号、行尾统一 LF、`.gitattributes`、`.gitignore`、中性示例名等<br>· **待裁 1（C 方案）** `SKILL.md` 拆分：正文 token **11,309 → 5,013**（-56%），移出 §四→`audit-and-evolve.md`、§三·补→`optional-containers.md`、§六→`self-check.md`、§三 树→`gen-tree.md`<br>· **待裁 2** 铁律口径统一：`iron-rules.md` 顶部新增**唯一的**「档位 → 铁律 ID」表；`tier-selection.md` 与 `_宪法段模板.md` 的「三条铁律」纠正为「三条核心约束」；`mandatory-vs-optional.md` §2.2 #16/#17 补触发条件 + 新增**三套编号 crosswalk**<br>· **待裁 3** 国际化：新增 `references/naming.md`（zh↔en 全量对照表）；`SKILL.md` §1.2 与 `due-diligence.md` §二 各加**第 5 问**「产物用中文还是英文命名」<br>· **待裁 4** `templates/` 目录名**不改**（规范允许）<br>· **待裁 5** 署名主体 → `xinchenXE(布耶尔)`（`metadata.author` 与 `LICENSE`） |

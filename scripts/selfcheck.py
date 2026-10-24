@@ -481,6 +481,63 @@ def check_bom_and_eol(rep):
             "bom=%d crlf=%d %s" % (len(bom), len(crlf), crlf if crlf else ""))
 
 
+def check_gov_root_literal(md, rep):
+    """新门 A: \u6cbb\u7406\u6839\u8def\u5f84\u4e0d\u5f97\u5199\u6b7b.
+
+    `<GOV_ROOT>` \u662f\u552f\u4e00\u5360\u4f4d\u7b26\uff0c\u5b83\u7684\u9ed8\u8ba4\u503c **\u53ea\u80fd\u5728\u4e00\u5904\u5b9a\u4e49**
+    \uff08`SKILL.md` \u00a73.0\uff09\u3002\u5176\u4f59\u5730\u65b9\u5199\u5b57\u9762\u91cf = \u4e0d\u53ef\u914d\u7f6e\u3002
+
+    \u4f8b\u5916\u767d\u540d\u5355\uff1a
+      - `SKILL.md` \u2014\u2014 \u5b83\u6709 \u00a73.0 \u7684\u5b9a\u4e49\u5757\uff08\u9ed8\u8ba4\u503c\u5c31\u5728\u90a3\u91cc\uff09
+      - `README.md` \u2014\u2014 \u5b89\u88c5/\u7528\u6cd5\u793a\u4f8b\uff0c\u9762\u5411\u8bfb\u8005\u7684\u81ea\u7136\u8bed\u8a00
+    """
+    LITERAL = "docs/governance"
+    ALLOW = {"SKILL.md", "README.md"}
+    bad = []
+    for f in md:
+        if f in ALLOW:
+            continue
+        for i, line in enumerate(read(f).split("\n"), 1):
+            if LITERAL in line:
+                bad.append("%s:%d" % (f, i))
+    rep.add(not bad, "gov-root-literal", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+
+
+# \u6863\u4f4d\u6807\u8bb0\u8bed\u6cd5: {\u6807\u51c6\u8d77} {\u5b8c\u6574\u8d77} {\u91cd\u578b} {\u65e0VCS} {\u53ef\u9009\u00b7\u89e6\u53d1} {\u6807\u51c6\u8d77\u00b7\u89e6\u53d1} {\u5b8c\u6574\u8d77\u00b7\u89e6\u53d1} {\u63a8\u8350\u9879}
+TIER_MARK_RE = re.compile(r"\{([^{}\n]{1,12})\}")
+TIER_MARK_ALLOWED = {
+    "\u6807\u51c6\u8d77", "\u5b8c\u6574\u8d77", "\u91cd\u578b", "\u65e0VCS",
+    "\u53ef\u9009\u00b7\u89e6\u53d1", "\u6807\u51c6\u8d77\u00b7\u89e6\u53d1",
+    "\u5b8c\u6574\u8d77\u00b7\u89e6\u53d1", "\u63a8\u8350\u9879",
+}
+
+
+def check_tree_tier_markers(md, rep):
+    """\u65b0\u95e8 B: \u751f\u6210\u6811\u91cc\u6bcf\u4e2a\u53ef\u9009/\u6709\u6863\u4f4d\u95e8\u69db\u7684\u5bb9\u5668\u90fd\u5fc5\u987b\u5e26\u5408\u6cd5\u6863\u4f4d\u6807\u8bb0.
+
+    2026-10-24 \u7aef\u5230\u7aef\u8bd5\u8dd1\u62ab\u9732\uff1a`\u4e22\u5f03\u8ba1\u5212/` `\u6267\u884c\u504f\u5dee/` `\u64cd\u4f5c\u8bb0\u5f55/` \u753b\u8fdb\u4e86\u6811\u5374\u6ca1\u6807\u6863\u4f4d\uff0c
+    \u7ed3\u679c\u6807\u51c6\u6863\u591a\u5efa\u4e86\u4e09\u4e2a\u5bb9\u5668\u3002\u672c\u95e8\u5c31\u662f\u4e3a\u4e86\u8ba9\u8fd9\u7c7b\u9519\u8bef\u53ef\u88ab\u673a\u68b0\u53d1\u73b0\u3002
+    """
+    gt = read("references/gen-tree.md")
+    bad = []
+    # \u53ea\u626b\u6811\u56f4\u680f\u5757\u91cc\u7684\u884c
+    in_tree = False
+    for i, line in enumerate(gt.split("\n"), 1):
+        if line.strip().startswith(FENCE):
+            in_tree = not in_tree
+            continue
+        if not in_tree:
+            continue
+        for mk in TIER_MARK_RE.findall(line):
+            if mk not in TIER_MARK_ALLOWED:
+                bad.append("references/gen-tree.md:%d unknown mark {%s}" % (i, mk))
+    # \u5fc5\u8981\u6027\uff1a\u5b9a\u4e49\u4e86\u6807\u8bb0\u8bed\u6cd5\u5c31\u4e0d\u80fd\u4e00\u4e2a\u90fd\u6ca1\u6709
+    nmarks = len(re.findall(r"\{", gt))
+    if nmarks < 8:
+        bad.append("references/gen-tree.md: only %d tier marks (expected >= 8)" % nmarks)
+    rep.add(not bad, "tree-tier-markers", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+
+
 # ---------------------------------------------------------------- main
 
 def main():
@@ -500,6 +557,8 @@ def main():
     check_stale_phrases(md, rep)
     check_line_number_refs(md, rep)
     check_bom_and_eol(rep)
+    check_gov_root_literal(md, rep)
+    check_tree_tier_markers(md, rep)
 
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1

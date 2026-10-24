@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.3.2"
+  version: "1.4.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -61,10 +61,10 @@ metadata:
 **先确认 shell**：本节命令是 POSIX 的；Windows 上先看
 `references/due-diligence.md` §一.0 的预检与替换表（**不要照抄 `2>/dev/null`**）。
 
-用 `references/due-diligence.md` 里的清单逐条过，结果写进交付的 `docs/governance/项目清单/尽调结论.md`
-（**微型档例外** —— 那个档不生成 `docs/governance/`，尽调结论写进 `NEXT.md` 的「已决定」节）。
+用 `references/due-diligence.md` 里的清单逐条过，结果写进交付的 `<GOV_ROOT>/项目清单/尽调结论.md`
+（**微型档例外** —— 那个档不生成 `<GOV_ROOT>/`，尽调结论写进 `NEXT.md` 的「已决定」节）。
 
-### 1.2 必问用户的问题（**五条提问** + 推荐项说明）
+### 1.2 必问用户的问题（**六条提问** + 推荐项说明）
 
 尽调能探到的不要问。探不到、且答案会改变生成结果的，**必须问**：
 
@@ -77,6 +77,7 @@ metadata:
    - 「怕计划写了没人执行」→ 状态机、闭环仪式、完成定义
    - 「怕数字对不上」→ 计数唯一真源、文档同步纪律
 5. **「治理文档的目录和文件名，用中文还是英文？」** —— 默认**中文**；目标仓库是英文项目 / 需跨语区分发 / 有 CI 处理路径时建议**英文**。选定后整棵树只用那一套，**不要混用**。对照表见 `references/naming.md`。
+6. **「治理根放在哪？」** —— 默认 `docs/governance`；若 `docs/` 已被产品文档站占用（Fumadocs / VitePress / Docusaurus），建议放仓库根的 `governance/`。**这就是 `<GOV_ROOT>` 的值**，定义见 §3.0。
 
 **另外还有「推荐项」——它不是提问，不要混进上面四条**（见 `references/mandatory-vs-optional.md` §六）
 **在初始化前连同尽调结论一起说明**。**每一项必须讲全三段，缺一不可**：
@@ -87,6 +88,24 @@ metadata:
 
 **三段都要落到可比较的量上**；讲不出量，说明还没想清楚这条值不值。
 用户点头就做，不点头就跳过。**目前有两项**：
+
+### 1.3 生成前的**强制门**（**逐项打勾才能进 §三**）
+
+> **这一节存在的理由**：`mandatory-vs-optional.md` §六 要求推荐项「**在初始化之前**说明」，
+> 但那是**一句规则**，不是一个**动作**。端到端试跑实测：先建了目录树才发现推荐项没问 ——
+> **正好是 skill 自己警告过的反模式**。所以把它变成一个必须逐项打勾的清单。
+>
+> **没打完勾就生成 = 流程违规**，产出的东西再好也不算数（`iron-rules.md` 铁律 ③ 同理）。
+
+- [ ] **六条提问**全部问过（探不到的才问，探到的不要问）
+- [ ] **两个推荐项**按三段格式说明过，且**用户已表态**（同意 / 跳过都要记）
+- [ ] **`<GOV_ROOT>` 已定**（§3.0；用户指定或采用默认值，且已记录）
+- [ ] **命名方案已定**（中文 / 英文，见 `references/naming.md`）
+- [ ] **档位已判**，且「为什么不选更高档」有答案
+- [ ] **上述结论已写进尽调结论**（`<GOV_ROOT>/项目清单/尽调结论.md`）
+
+> **勾完之后才开始建第一个目录。** 顺序反了就是返工 —— 而返工正是这套框架唯一要防的东西。
+
 
 - `工作范式.md` §六「环境事实」一节
 - 会话交接件（`登记提示词/`，闭环仪式第 8 件）
@@ -115,7 +134,7 @@ metadata:
 | **`快照/`** | — | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 |
 
 **微型档的正确处置是「不装」** —— 给一份约 15 行的 `NEXT.md` 模板，说明为什么这个规模
-装治理只有坏处。**如果尽调判出微型，不要生成 `docs/governance/`。**
+装治理只有坏处。**如果尽调判出微型，不要生成 `<GOV_ROOT>/`。**
 
 **重型档多出来的不是文档，是三个机制**：角色与权限矩阵、不可变台账、发布列车与版本纪律。
 单人项目里这套框架解决「跨会话失忆」；重型项目里它解决「多角色之间谁有权做什么」——
@@ -132,7 +151,35 @@ metadata:
 
 ## 三、生成（标准档为默认；按 §二 增减）
 
-生成 `docs/governance/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
+### 3.0 先定治理根路径：`<GOV_ROOT>`
+
+**本 skill 全部文档里的 `<GOV_ROOT>` 都指这一个值。它是唯一的定义处。**
+
+| 项 | 值 |
+|---|---|
+| **默认值** | `docs/governance` |
+| **可选** | 用户当轮指定（如 `governance`、`meta/governance`、`.governance`） |
+| **怎么定** | 尽调 §1.2 第 6 问（`SKILL.md` §一 与 `references/due-diligence.md` §二 同步） |
+| **何时定** | **生成任何文件之前**。定了之后整棵树只用这一个值，不混用 |
+
+**为什么要有它**：治理根不一定要放在 `docs/` 下 ——
+目标项目可能已经把 `docs/` 占给了产品文档站（如 Fumadocs / VitePress / Docusaurus）。
+把它硬塞进 `docs/governance/` 会和那个站点的构建配置打架。
+
+**选定后必须做的三件事**（漏一件就是半成品）：
+
+1. 在 `<GOV_ROOT>/README.md` 的「档位」一节记一行：`治理根：<值>（<日期> 用户选择）`。
+2. 把 `<GOV_ROOT>` 的真实值写进 `AGENTS.md` 宪法段的「默认阅读顺序」首行。
+3. **不要混用** —— 不要出现「治理根在 `governance/`、但某份文档写的是 `docs/governance/`」。
+
+> **反例（实测踩过的）**：本项目把治理根放在仓库根的 `governance/`。
+> 如果在生成时保留了模板里写死的 `docs/governance/`，产物里就会同时存在
+> 两套路径，**而且引用完整性门禁抓不到**（它只验路径存在性）。
+> 这正是 `<GOV_ROOT>` 存在的原因。
+
+---
+
+生成 `<GOV_ROOT>/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
 
 **完整生成树**（含每个容器的模板对照、重型档的两个机制容器）、
 「每个容器都要有 README」、`缓存/` 的两条纪律、两处刻意的合并、
@@ -153,7 +200,7 @@ metadata:
 `证据/` `缓存/` `工具/` `快照/` 这四个容器**不是每档都生成**，
 各自解决一类问题；**问题不存在的项目不该有它们**。
 
-**判定顺序、触发信号表、三条纪律、以及在 `docs/governance/README.md` 里怎么写，
+**判定顺序、触发信号表、三条纪律、以及在 `<GOV_ROOT>/README.md` 里怎么写，
 见 `references/optional-containers.md`。**
 
 

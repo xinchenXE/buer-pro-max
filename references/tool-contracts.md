@@ -168,7 +168,7 @@
 无 VCS 时没有 `git status`。用 `snapshot -Baseline <上一份 manifest>` 得到
 added/removed/changed 三组清单，**这就是脏度度量**。
 
-**产物落点**：`docs/governance/快照/`（**无 VCS 时唯一退路**；有 git 时此目录可不要）。
+**产物落点**：`<GOV_ROOT>/快照/`（**无 VCS 时唯一退路**；有 git 时此目录可不要）。
 **`.diff` / `.patch` / `.orig` / `.rej` / `.bak` 一律落缓存目录**，不进治理目录。
 
 ---

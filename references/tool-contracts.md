@@ -189,7 +189,7 @@ added/removed/changed 三组清单，**这就是脏度度量**。
   3. 日志落缓存目录
 ```
 
-### 三条铁律
+### 三条纪律
 
 1. **`verdict` 初始必须是 `PENDING_HUMAN_REVIEW`，且不得由执行轮自己改成 PASS。**
    执行者既生产证据、又裁决证据 = 没有裁决。（`anti-patterns.md` #1）

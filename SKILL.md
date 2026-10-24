@@ -1,6 +1,6 @@
 ---
 name: buer-pro-max
-description: Bootstrap a cross-session governance framework into any repository — plan containers, numbered ID sequences, a register/dispatch/execute authorization state machine, deviation and issue ledgers, evidence discipline, and a project constitution written into AGENTS.md. Use when the user asks to set up project governance, a plan/decision tracking system, a working-paradigm or development-paradigm document, a queue register, round-based work records, or says "治理框架", "建立治理", "开发范式", "登记队列", "建立计划体系", "给这个项目建一套规矩", "bootstrap governance", "set up a dev paradigm", "add a governance scaffold". Also triggers when a repo already has such a framework and the user wants it audited, extended, or has a project where sessions keep losing context between rounds.
+description: Bootstrap a cross-session governance framework into any repository — plan containers, numbered ID sequences, a register/dispatch/execute authorization state machine, deviation and issue ledgers, evidence discipline, and a project constitution written into AGENTS.md. Use when the user asks to set up project governance, a plan/decision tracking system, a working-paradigm or development-paradigm document, a queue register, round-based work records, or says "治理框架", "建立治理", "开发范式", "登记队列", "建立计划体系", "给这个项目建一套规矩", "bootstrap governance", "set up a dev paradigm", "add a governance scaffold". Also triggers when a repo already has such a framework and the user wants it audited, extended, or has a project where sessions keep losing context between rounds. Use it for solo-maintained, multi-session projects (roughly 5k+ lines, 3+ directories, or 20+ rounds of history) with read-only boundaries or a need for evidence of who approved what. Do NOT use it for one-off scripts, weekend experiments, or small single-file tools (the skill itself will recommend against installing), for projects already well covered by an issue tracker plus CI with per-round PR descriptions, or when the user only wants a longer CLAUDE.md rather than plan containers, ID sequences, and a closed-loop ritual.
 license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
@@ -105,7 +105,9 @@ metadata:
 - [ ] **`<GOV_ROOT>` 已定**（§3.0；用户指定或采用默认值，且已记录）
 - [ ] **命名方案已定**（中文 / 英文，见 `references/naming.md`）
 - [ ] **档位已判**，且「为什么不选更高档」有答案
-- [ ] **上述结论已写进尽调结论**（`<GOV_ROOT>/项目清单/尽调结论.md`）
+- [ ] **可选容器逐个按触发信号判过**（证据 / 缓存 / 工具 / 快照），结论已告诉用户
+- [ ] **上述结论已写进尽调结论**（`<GOV_ROOT>/项目清单/尽调结论.md`；
+      **微型档例外**：不建 `<GOV_ROOT>/`，结论写进 `NEXT.md` 的「已决定」节）
 
 > **勾完之后才开始建第一个目录。** 顺序反了就是返工 —— 而返工正是这套框架唯一要防的东西。
 
@@ -124,13 +126,13 @@ metadata:
 |---|---|---|---|---|---|
 | **适用** | 单文件脚本 / 周末实验 | 单人小工具或库 | 单人/小团队主力项目 | 跨会话长周期产品 | 多仓库 / 多角色 / 有发布与合规 |
 | **判据** | 1–2 个源文件，不打算回来维护 | < 5k 行；无外部上游；改动面 1 个目录 | 5k–50k 行；2–3 个目录；跨会话 | > 50k 行，**或**已有 ≥ 20 轮**治理轮次**（有逐轮记录的轮，不是提交数） | 多个维护者；发布列车；审计要求 |
-| **计划容器** | 无 | 活跃 / 归档 | + 休眠 / 归档文档 | 全部五个 | 全部五个 + 按流向分子目录 |
+| **计划容器** | 无 | 活跃 / 归档 | + 休眠 / 归档文档 | 全部（含丢弃） | 全部 + 按流向分子目录 |
 | **ID 序列** | 无 | 队列 + 轮次 | + 问题 | + 偏差（四序列） | 四序列 + 命名空间前缀 |
 | **台账** | 无 | 队列总表 | + 问题记录 / 修改记录 | + 偏差总账 / 操作记录 | + 审计台账 / 发布台账 |
 | **闭环仪式** | 无（提交即闭环） | 3 步 | 5 步 | 7 步 | 7 步 + 发布门 + 双人签署 |
 | **铁律**（按 ID，见 `iron-rules.md` 顶部） | 无 | ③ | ③④⑤⑥ | ③④⑤⑥ + ①②（按触发） | 同完整 + 契约化（角色矩阵） |
 | **宪法段长度** | 不写 | ~40 行 | ~100 行 | ~200 行 | ~200 行 + 角色/权限矩阵 |
-| **生成动作** | **什么都不生成** | 最小集（树见 `tier-selection.md` §四） | 默认集（树见 §三） | 全部 | 全部 + 角色矩阵 + 发布台账 |
+| **生成动作** | **什么都不生成** | 最小集（树见 `tier-selection.md` §四） | 默认集（树见 §三） | 全部 | 全部 + 角色矩阵 + **发布台账 + 审计台账** |
 | **可选容器**<br>（用户可推翻，见 §三·补） | — | `缓存/` 视需要 | `证据/` + `缓存/` | `工具/` + 前三者 | 同完整档 |
 | **`快照/`** | — | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 |
 
@@ -221,7 +223,10 @@ prolab-main/
 
 ---
 
-生成 `<GOV_ROOT>/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
+生成 `<GOV_ROOT>/` 文档树 + 一段**宪法段**。
+**宪法段写进哪个文件由宿主的现状决定**（三选一见 `templates/_宪法段模板.md` §六）：
+有 `CLAUDE.md` 无 `AGENTS.md` → 写进 `CLAUDE.md`；只有 `AGENTS.md` → 写进它并新建
+`CLAUDE.md` 一行 `@AGENTS.md`；两者都有 → 写进 `AGENTS.md` 并在 `CLAUDE.md` 补导入。
 
 **完整生成树**（含每个容器的模板对照、重型档的两个机制容器）、
 「每个容器都要有 README」、`缓存/` 的两条纪律、两处刻意的合并、

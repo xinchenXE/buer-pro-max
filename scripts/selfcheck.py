@@ -483,14 +483,21 @@ def check_line_number_refs(md, rep):
     rep.add(not bad, "line-number-refs", "count=%d %s" % (len(bad), bad or ""))
 
 
+TEXT_EXT = {".md", ".py", ".txt", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ""}
+BOMS = (bytes([0xEF, 0xBB, 0xBF]), bytes([0xFF, 0xFE]), bytes([0xFE, 0xFF]))
+CRLF_BYTES = bytes([0x0D, 0x0A])
+
+
 def check_bom_and_eol(rep):
-    """F4 新门 A: 任何文件不得带 BOM; 行尾必须全库统一为 LF."""
+    """F4 new gate A: text files must not carry a BOM; line endings must be LF."""
     bom, crlf = [], []
     for f in walk_all():
-        b = read_bytes(f)
-        if b.startswith(b"\xef\xbb\xbf"):
+        if os.path.splitext(f)[1].lower() not in TEXT_EXT:
+            continue
+        data = read_bytes(f)
+        if any(data.startswith(mark) for mark in BOMS):
             bom.append(f)
-        if b"\r\n" in b:
+        if CRLF_BYTES in data:
             crlf.append(f)
     ok = not bom and not crlf
     rep.add(ok, "bom-and-eol",
@@ -637,24 +644,60 @@ def check_tree_subtree_inherit(md, rep):
 
 
 def check_tier_table_consistency(md, rep):
-    """新门 D: 生成树的档位标记必须与 tier-selection.md §一 的权威表一致.
+    """生成树的档位标记必须与 tier-selection.md §一 的权威表一致.
 
-    这是 2026-10-24 扫描报告里 ~28 条发现的根因门：
-    tree-tier-markers 只验语汇合法，tree-subtree-inherit 只验继承，
-    两者都不读档位表。于是 AGENTS.md 标错、问题记录漏标全部照常放行。
+    **2026-10-24 复审修**：旧版 docstring 声称「与权威表一致」，
+    但代码**从未读过 `references/tier-selection.md`**，只硬编码了 5 条；
+    且 `if r:` 在容器行缺失时**静默通过**，`if legend:` 在图例解析失败时
+    整条规则跳过。三个坑同时存在，这道门很容易失效。
+
+    现在：从权威表的「计划容器」行**反推**出每个容器的起档，
+    再逐个与 gen-tree 的标记比对。任一容器行缺失、图例为空、或标记不符都报错。
     """
+    ts = read("references/tier-selection.md")
     gt = read("references/gen-tree.md")
     bad = []
 
+    # --- 从权威表反推起档 ---
+    tiers = ["微型", "轻量", "标准", "完整", "重型"]
+    mark_of = {"微型": None, "轻量": None, "标准": "标准起",
+               "完整": "完整起", "重型": "重型"}
+    row = None
+    for line in ts.split("\n"):
+        if line.startswith("| **计划容器**"):
+            row = line
+            break
+    expected = {}
+    if row is None:
+        bad.append("tier-selection.md: 找不到「**计划容器**」行")
+    else:
+        cells = [c.strip() for c in row.strip().strip("|").split("|")]
+        # cells[0] = 「**计划容器**」, 然后五个档位
+        # 容器名 -> 权威表里的说法（必须先匹配「归档文档」再匹配「归档」）
+        for cname, needle in (("活跃计划", "活跃"), ("归档文档", "归档文档"),
+                              ("归档计划", "归档"), ("休眠计划", "休眠"),
+                              ("丢弃计划", "丢弃")):
+            for idx in range(len(tiers) - 1, -1, -1):
+                cell = cells[idx + 1] if idx + 1 < len(cells) else ""
+                # 「归档文档」里也含「归档」，先把它抹掉再判断「归档」
+                probe = cell.replace("归档文档", "") if needle == "归档" else cell
+                if needle in probe and "—" not in cell:
+                    expected[cname] = mark_of[tiers[idx]]
+                    break
+
+    # --- 解析 gen-tree 的树行 ---
     rows = []
     in_tree = False
     for i, line in enumerate(gt.split("\n"), 1):
         if line.strip().startswith(FENCE):
             in_tree = not in_tree
             continue
-        if in_tree and "\u2500\u2500" in line:
+        if in_tree and "──" in line:
             mk = TIER_MARK_RE.search(line)
             rows.append((i, line, mk.group(1) if mk else None))
+
+    if not rows:
+        bad.append("gen-tree.md: 树行解析为空")
 
     def find_row(sub):
         for i, line, mk in rows:
@@ -662,32 +705,33 @@ def check_tier_table_consistency(md, rep):
                 return i, line, mk
         return None
 
-    # 1) AGENTS.md 不得带 {标准起}（轻量档也要写宪法段）
+    # --- 存在性 + 值精确比对 ---
+    for cname, want in expected.items():
+        needle = cname + "/"
+        r = find_row(needle)
+        if r is None:
+            bad.append("gen-tree.md: 缺少容器行 %s" % needle)
+            continue
+        if r[2] != want:
+            bad.append("gen-tree.md:%d %s mark={%s} but tier table says {%s}" % (
+                r[0], needle, r[2], want))
+
+    # --- 两条特殊硬约束 ---
     r = find_row("AGENTS.md")
-    if r and r[2] == "\u6807\u51c6\u8d77":
+    if r and r[2] == "标准起":
         bad.append("gen-tree.md:%d AGENTS.md must NOT be standard-tier-only" % r[0])
-
-    # 2) 问题记录/ 与 代码修改记录/ 必须带档位标记
-    for name in ("\u95ee\u9898\u8bb0\u5f55/", "\u4ee3\u7801\u4fee\u6539\u8bb0\u5f55/"):
-        r = find_row(name)
-        if r and r[2] is None:
-            bad.append("gen-tree.md:%d %s unmarked; tier table says standard" % (r[0], name))
-
-    # 3) 工具/ 必须是完整档起
-    r = find_row("\u5de5\u5177/")
-    if r and r[2] and not r[2].startswith("\u5b8c\u6574\u8d77"):
-        bad.append("gen-tree.md:%d tools should be full-tier, got {%s}" % (r[0], r[2]))
-
-    # 4) 缓存/ 不得带档位门槛（轻量「视需要」）
-    r = find_row("\u7f13\u5b58/")
-    if r and r[2] and r[2].startswith("\u6807\u51c6"):
+    r = find_row("缓存/")
+    if r and r[2] and r[2].startswith("标准"):
         bad.append("gen-tree.md:%d cache must not be standard-tier-only" % r[0])
 
-    # 5) 树里的每种标记都必须出现在图例表
+    # --- 图例：空集必须报错，不能静默跳过 ---
     legend = set()
     in_legend = False
     for line in gt.split("\n"):
-        if "\u6807\u8bb0\u600e\u4e48\u8bfb" in line:
+        if "标记" in line and "怎么读" in line:
+            in_legend = True
+            continue
+        if "标记" in line and ("含义" in line or "| 标记 |" in line):
             in_legend = True
             continue
         if in_legend:
@@ -695,35 +739,37 @@ def check_tier_table_consistency(md, rep):
                 break
             for m in re.findall(r"`\{([^{}`]+)\}`", line):
                 legend.add(m.strip())
-    if legend:
-        for i, line, mk in rows:
-            if mk and mk not in legend:
-                bad.append("gen-tree.md:%d mark {%s} missing from legend" % (i, mk))
+    if not legend:
+        bad.append("gen-tree.md: 图例表解析为空（标题被改名？）")
+    for i, line, mk in rows:
+        if mk and mk not in legend:
+            bad.append("gen-tree.md:%d mark {%s} missing from legend" % (i, mk))
 
     rep.add(not bad, "tier-table-consistency",
-            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+            "checked=%d bad=%d %s" % (len(expected), len(bad), bad[:6] if bad else ""))
 
 
 def check_container_readme_sections(md, rep):
-    """新门 E: 每个容器 README 模板都必须写「不在这里放什么」.
+    """每个容器 README 模板都必须写「不在这里放什么」.
 
-    2026-10-31 端到端试跑暴露：`_容器README模板.md` 有这一节，
-    但 `_活跃计划README模板` / `_项目清单README模板` / `_治理根README模板` 三份**都没有**。
-    而「每个容器都要有 README，写清放什么/怎么进/怎么出/不在这里放什么」是核心纪律。
-
-    判据：templates/ 下所有 `*README*模板.md` 必须含该节标题。
+    **2026-10-24 修**: 旧版匹配到 0 个模板时 `bad` 为空直接 PASS,
+    无法区分「查了 0 个」与「0 个坏的」。现在扫描数为 0 也报错。
     """
     bad = []
+    scanned = 0
     for f in md:
         base = f.split("/")[-1]
         if not f.startswith("templates/"):
             continue
         if "README" not in base:
             continue
+        scanned += 1
         if "不在这里放什么" not in read(f):
             bad.append(f)
+    if scanned == 0:
+        bad.append("NO container README templates matched (renamed?)")
     rep.add(not bad, "container-readme-sections",
-            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+            "scanned=%d bad=%d %s" % (scanned, len(bad), bad[:6] if bad else ""))
 
 
 # --- 序数一致性 -------------------------------------------------------------
@@ -737,7 +783,9 @@ def check_container_readme_sections(md, rep):
 #   第 4 步 = 代码地图同步 / 第 5 步 = 归档 / 第 6 步 = 修改记录 / 第 7 步 = 收尾快照
 # 判据词表只用来判断「这句话在说哪一步」，不要求措辞完全一致。
 ORDINAL_STEPS = {
-    1: ("计划", "勾选", "验证记录", "偏差记录"),
+    # 不要用裸「计划」做主题词：文件名 _活跃计划README模板 里就含「计划」，
+    # 会把目录树里的纯引用行误判成「第 1 步」的上下文（2026-10-24 实测）。
+    1: ("勾选", "验证记录", "偏差记录", "任务分解"),
     2: ("逐轮", "轮次章节", "项目总结"),
     3: ("索引", "最近"),
     4: ("代码地图", "可写范围", "文件作用", "代码结构"),
@@ -745,14 +793,16 @@ ORDINAL_STEPS = {
     6: ("修改记录",),
     7: ("快照",),
 }
-ORDINAL_LINE_RE = re.compile(
-    r"(完成宣告|闭环仪式)[^\n]{0,24}第\s*(\d+)\s*步"
-    # 并列写法：「完成宣告的第 3 步与第 4 步」—— 后半截没有重提前缀词，
-    # 不单独匹配就会**整句漏检**（2026-10-24 试跑实测）。
-    # 顿号写法同样要认：「完成宣告第 3、5 步」—— 第二版漏了它，
-    # 于是 README 目录树里那处「3、5 步」一直没被抓到（第三轮牙齿验证补上）。
-    r"(?:\s*[与和、,，/]\s*第?\s*(\d+)\s*步){0,2}"
-)
+
+# 关键词之后、一个「子句」之内的步号声明。两种写法都要认：
+#   第 3 步与第 4 步   -> 两次独立匹配（第二个也带「第」）
+#   第 3、4 步         -> 一次匹配，括号里含两个数字
+# 旧版用 `[^\n]{0,24}` 做前缀，贪婪地吃掉了第一个步号，于是：
+#   「完成宣告第 3 步与第 4 步」只校验了第 4 步；「第 3、5 步」完全不匹配。
+# 那是一个**看起来在、其实不在**的门 —— 2026-10-24 复审实测出来的。
+ORDINAL_KW_RE = re.compile(r"(?:完成宣告|闭环仪式)")
+ORDINAL_CLAIM_RE = re.compile(r"第\s*([\d\s、,，/与和]+?)\s*步")
+
 ORDINAL_SKIP = {
     # 这份是「步数表本身」的定义处，里面的每句话都在给第 N 步下定义，
     # 不需要拿它自己的词表去校验它自己。
@@ -760,70 +810,96 @@ ORDINAL_SKIP = {
 }
 
 
-def _ordinal_claim_ok(window, n):
-    words = ORDINAL_STEPS.get(n)
-    if not words:
-        return True  # 步数超出表：不判（步数表将来可能扩），交给别的门
-    return any(w in window for w in words)
+def _digits(s):
+    return [int(x) for x in re.findall(r"\d+", s)]
+
+
+def _ordinal_claims(line):
+    """返回该行里「关键词 + 步号」的步号列表；无关键词返回 None."""
+    m = ORDINAL_KW_RE.search(line)
+    if not m:
+        return None
+    nums = []
+    for c in ORDINAL_CLAIM_RE.finditer(line, m.start(), m.start() + 60):
+        nums.extend(_digits(c.group(1)))
+    return nums or None
 
 
 def check_ordinal_consistency(md, rep):
     """完成宣告/闭环仪式里出现的「第 N 步」必须与权威步数表一致.
 
-    判据用**性质**：不是比对措辞，而是检查「第 N 步」在同一段落窗口里
-    是否配上了那一步的**主题词**。窗口取**上文 3 行 + 本行**，**不含下文**：
+    判据用**性质**：不比对措辞，而是看这句话**同时提到了哪些步**，
+    再要求每个步号都能在上下文里找到它自己的主题词。
 
-    - 主题词常出现在**标题行或列表项**，正文与它之间可能隔着 1–3 行说明；
-    - **不含下文**是牙齿验证的结果 —— 窗口取 ±4 时，相邻树节点里的
-      「归档计划」会被算作第 5 步的主题词，于是「第 5 步」的错误写法被放过（假阴性）。
+    窗口 = 本行 + 上文 3 行：
+    - 主题词常出现在标题行或列表项，正文与它之间可能隔着 1–3 行说明；
+    - **不含下文**是牙齿验证的结论 —— 含下文时，相邻树节点里的「归档计划」
+      会被当成第 5 步的主题词，于是写错的「第 5 步」照样通过（假阴性）。
 
-    **已知覆盖边界（不要高估这道门）**：它只抓「窗口内出现了主题词、但步号与主题词不匹配」
-    的写法。**不含任何主题词的纯引用行不在覆盖范围内** —— 例如目录树里的
-    「`_活跃计划README模板.md ← 完成宣告第 3、4 步的落点」，整行只说步号、不说那步是什么，
-    门无从判断。这类跨文件引用**必须人工核对**（本 skill 实测漏过一处 3、5 步）。
+    **覆盖边界（不要高估这道门）**：本行与上文里**一个主题词都没有**的纯引用行，
+    门无从判断，会计入 `unjudged` 而不是判红。例如
+    「某模板 ← 完成宣告第 3、4 步的落点」这种整行只说步号的写法。
+    这类行必须人工核对（`self-check.md` 里有对应的人工项）。
     """
-    bad = []
+    bad, unjudged = [], 0
     for f in md:
         if f in ORDINAL_SKIP:
             continue
         lines = read(f).split("\n")
         for idx, line in enumerate(lines):
-            for m in ORDINAL_LINE_RE.finditer(line):
-                window = "\n".join(lines[max(0, idx - 3): idx + 1])
-                for g in range(2, len(m.groups()) + 1):
-                    if not m.group(g):
-                        continue
-                    n = int(m.group(g))
-                    if not _ordinal_claim_ok(window, n):
-                        bad.append("%s:%d 第%d步" % (f, idx + 1, n))
+            nums = _ordinal_claims(line)
+            if not nums:
+                continue
+            window = "\n".join(lines[max(0, idx - 3): idx + 1])
+            topics = {n for n, ws in ORDINAL_STEPS.items() if any(w in window for w in ws)}
+            if not topics:
+                unjudged += 1
+                continue
+            for n in nums:
+                if n in ORDINAL_STEPS and n not in topics:
+                    bad.append("%s:%d 第%d步(上下文说的是第%s步)" % (
+                        f, idx + 1, n, "/".join(map(str, sorted(topics)))))
     rep.add(not bad, "ordinal-consistency",
-            "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+            "bad=%d unjudged=%d %s" % (len(bad), unjudged, bad[:8] if bad else ""))
 
 
 def check_template_machine_facts(md, rep):
-    """生成件模板里不得留下**未标注例外**的本机事实.
+    """模板的生成块里不得出现本机路径.
 
-    2026-10-24 试跑暴露：`self-check.md` 禁止生成件含本机路径/端口，
-    但 `_工作范式模板.md` §六 又要求写实测的路径与端口 —— 两条互相打架。
-    结论是**例外必须写在规则里**（已补 `self-check.md` 的「例外二」），
-    本门只守一条可机械判定的边界：**模板里的绝对盘符路径**（`X:\\...`）必须是不存在的示例，
-    或所在文件显式声明了「环境事实」例外。
-
-    判据用性质：盘符路径永远不通用，一旦被原样抄进生成件就是本机事实泄漏。
+    覆盖: 盘符(反斜杠 / 正斜杠) / Unix 家目录 / UNC.
+    **避免误伤 URL**: 盘符规则要求盘符字母前面不是字母 —— 否则 https:// 里的 s:/ 会被命中.
     """
-    drive_re = re.compile(r"[A-Za-z]:\\[^\s`|)]+")
+    _bs = chr(92)
+    pat = re.compile(
+        "(?<![A-Za-z])[A-Za-z]:[" + _bs + "/]"
+        + "|/home/|/Users/|~/"
+        + "|(?:" + _bs + _bs + ")"
+    )
+
     bad = []
+    scanned = 0
     for f in md:
         if not f.startswith("templates/"):
             continue
-        text = read(f)
-        if "环境事实" in text:      # 该模板本身就在讲「实测环境事实」
-            continue
-        for lineno, line in enumerate(text.split("\n"), 1):
-            if drive_re.search(line):
+        for lineno, line in in_code_blocks(read(f)):
+            scanned += 1
+            if pat.search(line):
                 bad.append("%s:%d" % (f, lineno))
+    if scanned == 0:
+        bad.append("NO code-block lines scanned in templates")
     rep.add(not bad, "template-machine-facts",
-            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+            "scanned=%d bad=%d %s" % (scanned, len(bad), bad[:4] if bad else ""))
+
+
+EXPECTED_GATES = [
+    "fence-pairing", "template-dead-links", "path-refs-exist", "orphan-files",
+    "readme-tree", "md-files", "count-claims", "version-consistency",
+    "marker-vocabulary", "stale-phrases", "line-number-refs", "bom-and-eol",
+    "gov-root-literal", "tree-tier-markers", "tree-subtree-inherit",
+    "tier-table-consistency", "container-readme-sections",
+    "ordinal-consistency", "template-machine-facts",
+]
+
 
 def main():
 
@@ -831,28 +907,88 @@ def main():
     md = walk_md()
     rep = Report()
 
-    check_fences(md, rep)
-    check_internal_dead_links(md, rep)
-    check_path_refs(md, rep)
-    check_orphans(md, rep)
-    check_tree_vs_files(md, rep)
-    check_md_files(md, rep)
-    check_count_claims(md, rep)
-    check_version_consistency(rep)
-    check_markers(md, rep)
-    check_stale_phrases(md, rep)
-    check_line_number_refs(md, rep)
-    check_bom_and_eol(rep)
-    check_gov_root_literal(md, rep)
-    check_tree_tier_markers(md, rep)
-    check_tree_subtree_inherit(md, rep)
-    check_tier_table_consistency(md, rep)
-    check_container_readme_sections(md, rep)
-    check_ordinal_consistency(md, rep)
-    check_template_machine_facts(md, rep)
+    try:
+        check_fences(md, rep)
+    except Exception as exc:
+        rep.add(False, "fence-pairing", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_internal_dead_links(md, rep)
+    except Exception as exc:
+        rep.add(False, "template-dead-links", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_path_refs(md, rep)
+    except Exception as exc:
+        rep.add(False, "path-refs-exist", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_orphans(md, rep)
+    except Exception as exc:
+        rep.add(False, "orphan-files", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_tree_vs_files(md, rep)
+    except Exception as exc:
+        rep.add(False, "readme-tree", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_md_files(md, rep)
+    except Exception as exc:
+        rep.add(False, "md-files", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_count_claims(md, rep)
+    except Exception as exc:
+        rep.add(False, "count-claims", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_version_consistency(rep)
+    except Exception as exc:
+        rep.add(False, "version-consistency", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_markers(md, rep)
+    except Exception as exc:
+        rep.add(False, "marker-vocabulary", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_stale_phrases(md, rep)
+    except Exception as exc:
+        rep.add(False, "stale-phrases", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_line_number_refs(md, rep)
+    except Exception as exc:
+        rep.add(False, "line-number-refs", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_bom_and_eol(rep)
+    except Exception as exc:
+        rep.add(False, "bom-and-eol", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_gov_root_literal(md, rep)
+    except Exception as exc:
+        rep.add(False, "gov-root-literal", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_tree_tier_markers(md, rep)
+    except Exception as exc:
+        rep.add(False, "tree-tier-markers", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_tree_subtree_inherit(md, rep)
+    except Exception as exc:
+        rep.add(False, "tree-subtree-inherit", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_tier_table_consistency(md, rep)
+    except Exception as exc:
+        rep.add(False, "tier-table-consistency", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_container_readme_sections(md, rep)
+    except Exception as exc:
+        rep.add(False, "container-readme-sections", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_ordinal_consistency(md, rep)
+    except Exception as exc:
+        rep.add(False, "ordinal-consistency", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_template_machine_facts(md, rep)
+    except Exception as exc:
+        rep.add(False, "template-machine-facts", "gate crashed: %s: %s" % (type(exc).__name__, exc))
 
-    if len(rep.rows) < 18:
-        rep.add(False, "gate-count", "only %d gates (<18)" % len(rep.rows))
+    # 按**门名**断言，而不是数行数 —— 数行数时删掉一门仍等于阈值，整次运行照样 exit 0。
+    names = [n for _, n, _ in rep.rows]
+    missing = [g for g in EXPECTED_GATES if g not in names]
+    if missing:
+        rep.add(False, "gate-count", "missing gates: %s" % missing)
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1
 

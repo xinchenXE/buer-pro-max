@@ -1,8 +1,13 @@
 # buer-pro-max
 
-> 把一套**跨会话的项目治理体系**装进任意仓库的 Claude skill。
+> 把一套**跨会话的项目治理体系**装进任意仓库的**通用 Agent Skill**。
 >
 > 它解决的不是「怎么写文档」，而是**「下一个会话凭什么知道这一轮发生了什么、下一步该做什么」**。
+>
+> **不绑定任何宿主**：内容是**纯 Markdown + 一个自检脚本（Python 3，仅维护期需要）**，
+> 没有任何宿主 API、SDK 或工具调用依赖。Claude Code / Codex / Cursor / Gemini CLI /
+> 其他读 `AGENTS.md` 约定或支持 skill / 规则目录的 agent 都能用 ——
+> **只有「装到哪个目录」这一步由宿主决定**（见 §一）。
 >
 > **独立产物**：不包含任何具体项目的内容，独立迭代，与任何项目的更新节奏无关。
 > 其中的规则形态与教训来自长期的真实开发实践 —— **主要出自
@@ -54,38 +59,52 @@
 
 ## 一、安装
 
-把整个文件夹拷进 skills 目录即可。
+它是一个**通用 Agent Skill**：一份目录，里面是纯 Markdown 规则 + 模板 + 一个自检脚本。
+**没有构建步骤、没有运行时依赖、没有宿主 SDK**。装法只有一个动作 ——
+**把整个目录放到宿主约定的 skills / 规则目录下**。
+
+### 1. 常见宿主的放置位置
+
+| 宿主 | 放哪 | 备注 |
+|---|---|---|
+| **Claude Code** | `~/.claude/skills/`（用户级）或 `<项目根>/.claude/skills/`（项目级） | 本 skill 按此格式编写，开箱可用 |
+| **Codex** | `$CODEX_HOME/skills/`（默认 `~/.codex/skills/`） | |
+| **Cursor** | 项目内 `.cursor/rules/`，或把 `SKILL.md` 作为规则文档喂给它 | Cursor 不读 skill 目录，读规则 |
+| **Gemini CLI / 其他** | 该工具自己文档写的 skill / 规则位置 | **不要猜路径** —— 查它的文档 |
+| **任何没有 skill 机制的 agent** | 直接把 `SKILL.md` 当规范贴进上下文，`references/` 放在可达位置 | 退化为「一份很长的规则文档」，仍然有效 |
 
 ```sh
-# 用户级（对所有项目生效）
-cp -r buer-pro-max ~/.claude/skills/
+# 通用做法：拷到宿主约定的 skills 目录
+cp -r buer-pro-max <宿主的 skills 目录>/
 
-# 或项目级（只对该项目生效）
-cp -r buer-pro-max <项目根>/.claude/skills/
+# Claude Code 用户级（示例）
+cp -r buer-pro-max ~/.claude/skills/
 ```
 
-Windows：
-
 ```powershell
+# Windows
 Copy-Item -Recurse -Force buer-pro-max "$env:USERPROFILE\.claude\skills\buer-pro-max"
 ```
 
-装好后在新会话里说 **"给这个项目建立治理"** 或 **"建立治理框架"** 即可触发。
+### 2. 触发
 
-**其他 agent（Codex / Cursor / 其他）怎么装**：上面的 `.claude/skills/` 是 Claude Code 的约定。
-换宿主时**不要猜路径** —— 两种可靠做法：
-1. 把整个 `buer-pro-max/` 放到该工具**约定读取规则/技能的位置**（查它自己的文档）；
-2. 或**直接把 `SKILL.md` 的内容作为规范喂给它**，并把 `references/` 一起放在可达位置。
+装好后在新会话里说 **「给这个项目建立治理」**、**「建立治理框架」**、
+**「bootstrap governance」**、**「set up a dev paradigm」** 等即可触发
+（完整触发词见 `SKILL.md` 的 `description`）。
 
-**Codex** 的约定位置是 `$CODEX_HOME/skills/`（默认 `~/.codex/skills/`）。
+> **如果你的宿主不支持「自动加载技能描述」**：直接把 `SKILL.md` 开头那段
+> `description` 贴给 agent，或说「读 `SKILL.md` 并按它执行」。
 
-> **运行期无依赖，维护期需 Python 3**：这个 skill 被读取时是纯 Markdown（无依赖）；
-> 只有**维护它自己**时才需要 Python 3 跑 `scripts/selfcheck.py`。
+### 3. 依赖
 
-> **产物不依赖 Claude Code**（skill 本身是 Claude Code 格式的，这一条要说清）：
-> 本 skill 的**产物**是写进 `AGENTS.md` 的宪法段 + `<GOV_ROOT>/` 文档树，
-> 两者都是纯文本。任何读 `AGENTS.md` 约定的工具（Codex / Cursor / 其他 agent）都能吃到同一份规则。
-> **注意区分**：产物跨工具通用 ✅；**读取这个 skill 的入口**（`SKILL.md`）是 Claude Code 的目录约定 ❌。
+- **读取 / 使用本 skill：零依赖。** 它是纯 Markdown。
+- **维护它自己**（改完跑自检）：需要 **Python 3**，只用标准库，无第三方包。
+- **生成出来的产物**：也是纯 Markdown 与配置文本，**不依赖任何 agent**。
+
+> **产物天然跨工具**：写进 `AGENTS.md` 的宪法段 + `<GOV_ROOT>/` 文档树都是纯文本。
+> 任何读 `AGENTS.md` 约定的工具都能吃到同一份规则。
+> 只有一件事是宿主相关的：**宪法段必须落到那个宿主真正会自动加载的文件里**
+> —— 见 `templates/_宪法段模板.md` §五 的三选一。
 
 ---
 
@@ -101,7 +120,10 @@ Copy-Item -Recurse -Force buer-pro-max "$env:USERPROFILE\.claude\skills\buer-pro
    探不到的**才问用户**（六条提问，见下）。
 2. **判档**：五档 —— 微型 / 轻量 / 标准 / 完整 / 重型。**宁可先低一档** ——
    框架可以长上去，多余的容器只会变成噪音。
-3. **生成**：`<GOV_ROOT>/` 文档树 + 一段写进 `AGENTS.md` 的**宪法段**。
+3. **生成**：`<GOV_ROOT>/` 文档树 + 一段**宪法段**。
+   宪法段落进**宿主真正会自动加载的那个文件** —— Claude Code 是 `CLAUDE.md`，
+   多数其他 agent 是 `AGENTS.md`，两者都存在时写 `AGENTS.md` 并在 `CLAUDE.md` 补一行导入。
+   三选一见 `templates/_宪法段模板.md` §五。
 
 **五档速查**（完整判据与升降档信号见 `references/tier-selection.md`）：
 
@@ -193,7 +215,7 @@ buer-pro-max/
 ├── templates/                     ← 23 份模板，按 SKILL.md §三 的生成树对号入座
 │   ├── _治理根README模板.md         ← ★ <GOV_ROOT>/README.md（入口）
 │   ├── _工作范式模板.md             ← ★★ 规则的权威载体
-│   ├── _宪法段模板.md               ← ★ 写进 AGENTS.md 的那一段
+│   ├── _宪法段模板.md               ← ★ 宪法段（落进宿主会自动加载的文件）
 │   ├── _项目清单README模板.md
 │   ├── _活跃计划README模板.md       ← 完成宣告第 3、4 步的落点
 │   ├── _项目总结模板.md             ← 逐轮叙事
@@ -393,6 +415,7 @@ skill：走完成宣告 N 步 —— 勾选计划、追加轮次章节、更新�
 
 | 版本 | 日期 | 修复问题 |
 |---|---|---|
+| **1.5.5** | 2026-10-24 | **明确为「通用 Agent Skill」，不再写死为 Claude 专属。**<br>· **开头定位改写**：「Claude skill」→「通用 Agent Skill」，并点明内容是纯 Markdown + 一个维护期才需要的 Python 自检脚本，**无宿主 API / SDK / 工具调用依赖**<br>· **§一 安装重写**：从「拷进 `.claude/skills/`」改为**宿主矩阵**（Claude Code / Codex / Cursor / Gemini CLI / 无 skill 机制的 agent），并说明「没有自动加载机制的宿主」怎么用（把 `SKILL.md` 当规范喂进去）<br>· **删掉自相矛盾的旧说法**：原文说「产物跨工具通用 ✅；读取入口是 Claude Code 约定 ❌」，与「通用 skill」定位冲突 —— 改为「只有**装到哪个目录**由宿主决定」，其余全部通用<br>· **依赖一节独立成节**：读取零依赖 / 维护需 Python 3 标准库 / 产物零依赖<br>· **`SKILL.md` 的 `description`** 以 `host-agnostic Agent Skill (plain Markdown, no runtime dependencies)` 开头<br>· **宪法段入口三选一改为多宿主矩阵**（`templates/_宪法段模板.md` §五）：Claude Code 读 `CLAUDE.md`、多数其他 agent 读 `AGENTS.md`，并给出「正文只写一份 + 各宿主入口补一行导入」的推荐做法；`references/self-check.md` 与 `SKILL.md` 的对应条目同步<br>· **README §九 新增发布纪律**：**每次推送只要改了 `.md` 或 `scripts/` 就必须动版本号最后一位**，不许以「改动很小」为由跳过 |
 | **1.5.4** | 2026-10-24 | **对 skill 本体做五维度复审后的修复 + 补充适用场景。**复审维度：一致性 / 模板 / 流程 / 规则冲突 / 自检脚本。复核后改掉 30 余处：<br>· **新加的两道门本身是假门**（见 anti-patterns #26）：`ordinal-consistency` 的贪婪前缀吃掉第一个步号、顿号写法完全不匹配；`tier-table-consistency` 从未读权威表、容器行缺失时静默通过。两门重写，`gate-count` 改为**断言门名集合**，`bom-and-eol` 改为文本白名单，每道门包 try/except（崩溃转 FAIL）<br>· **§4.0 把「有 AGENTS.md」误判成「已有治理体系」** —— 普通仓库的 `AGENTS.md` 会被短路进审计模式。改为只认治理根 / 治理标记；只有 `AGENTS.md` 时走正常初始化<br>· **§1.3 强制门与「微型档不建治理根」死锁** —— 补微型档例外<br>· **§三 顶层无条件写 `AGENTS.md`**，与宿主三选一冲突 —— 改为按 `CLAUDE.md` / `AGENTS.md` 现状分支<br>· **轻量档最小集三处说法不一**（「只装三样」vs 实际六个容器）—— 统一<br>· **轻量档核心约束集合两处不一**（#1/#2/#4 vs #2/#3/#4）—— 统一为四条，并注明 #3 ≡ 铁律 ③<br>· **交接件档位口径**：`completion-ritual` 写「完整/重型默认执行」，与「推荐项」冲突 —— 统一为推荐项<br>· **休眠计划唤醒步骤「见下」但下面没有** —— 补三步流程<br>· **快照判据「探 `.git`」会漏掉仓库根在上层** —— 改为 `git rev-parse --show-toplevel`<br>· **模板生成块里残留大量生成期指令与 skill 内部路径** —— `_工作范式`、`_尽调结论`、`_宪法段` 清掉；`_记录模板` 声明不复制却抄了一份清单，改为指针；`_问题模板` 相对路径多退一层<br>· **术语误用**：证据 / 快照模板的「三条铁律」改为「三条纪律」（铁律表是全库唯一权威）<br>· **anti-patterns +26**：门写好了、也「通过」了，但判据本身是坏的<br>· **复审发现新加的两道门本身是假门**（见 anti-patterns #26）：`ordinal-consistency` 的贪婪前缀吃掉第一个步号、顿号写法完全不匹配；`tier-table-consistency` 从未读权威表。已重写并与 `gate-count` 一起改为「断言门名集合」；`bom-and-eol` 改为文本白名单；每道门包 try/except，崩溃转 FAIL |
 | **1.5.3** | 2026-10-24 | **第四轮端到端试跑（重型前后端分离项目）后的语义级修复。** 17 门全绿的同时，实际生成中撞到 9 处「门结构上抓不到」的问题：<br>· **完成宣告步序在四份文件里指反** —— `_活跃计划README模板`（2 处）、`_记录模板`（勾选顺序）、`self-check.md`、`gen-tree.md` 把「代码地图 ↔ 归档」的第 4/5 步写反；权威是 `completion-ritual.md` 的 4 同步 / 5 归档。**新门 `ordinal-consistency` 机检，牙齿验证 3/3**<br>· **`_记录模板` 勾选清单只到 5 步**（完整档应有 7 步 + 交接件），补全为 8 项<br>· **`self-check.md` 要求产物写 `references/tool-contracts.md`**，直接违反它自己下一节的「产物不得含 skill 内部路径」——改为「待实现 + 目标项目内的重建入口」<br>· **铁律 ⑤ 的去留前后矛盾** —— `_宪法段模板` §二 让「无隔离工作区时删铁律 5」，与 `iron-rules.md` 的无条件必选冲突。裁决：③④⑤⑥ 任何档位不得删，只把实例写成「当前没有尚未落地的入口」<br>· **「无本机事实」与「环境事实一节」互斥** —— `self-check.md` 补**例外二**：豁免 `工作范式.md` §六与尽调结论里的探测证据，其余落点仍禁止。**新门 `template-machine-facts`**（模板不得含未标注的盘符路径）<br>· **「六条提问」写成「上面四条」** —— SKILL.md §1.2 修正<br>· **交接件「第 8 件」在权威步数表里不存在** —— `completion-ritual.md` 补 §三·8 并说明「单列不并进步数表」的理由<br>· **`工具/` 触发条件三个子句是「且」还是「或」没写** —— 明确为「三者同时成立才触发」<br>· **「> 20 轮历史」会跳档**，且「轮次」未定义 —— 改为「≥ 20 轮**治理轮次**（有逐轮记录的轮，不是提交数）」，两处表格同步<br>· **尽调不探「HEAD 有、工作区已删」的既有治理树** —— `due-diligence.md` 新增 §4.0 判据表（含成批 `D` 的处置与封存导出流程）。**这一条是本轮最危险的漏判：险些生成两套并存的治理树**<br>· **§3.0.2 替换清单补第 6 项**：产物必须 UTF-8 无 BOM + LF<br>· **gate 数 17 → 19**，全绿 |
 | **1.5.2** | 2026-10-24 | **第三轮端到端试跑后的收口。** v1.5.1 上跑完整初始化，验收 21 项发现 3 个真缺陷，全部是 skill 级的：<br>· **四份容器 README 模板缺「不在这里放什么」** —— `_活跃计划` / `_项目清单` / `_治理根` / `_执行偏差` 全都没有这一节，而「放什么/怎么进/怎么出/**不在这里放什么**」是核心纪律。新门 `container-readme-sections` 机检，**牙齿验证通过**<br>· **「逐字记录用户原话」与「产物无本机事实」冲突** —— 原话里带绝对路径时两条互斥。`self-check.md` 补裁决：**保留原话、路径段脱敏**，并注明「路径已脱敏」<br>· **治理根 README 的档位节缺 3 个槽位**（治理根 / 命名方案 / 可选容器）—— v1.5.1 已加到模板，本次是产物未按新模板重生成，已在验收中捕获<br>· **gate 数 16 → 17**，全绿 |

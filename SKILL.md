@@ -1,11 +1,11 @@
 ---
 name: buer-pro-max
-description: Bootstrap a cross-session governance framework into any repository — plan containers, numbered ID sequences, a register/dispatch/execute authorization state machine, deviation and issue ledgers, evidence discipline, and a project constitution written into AGENTS.md. Use when the user asks to set up project governance, a plan/decision tracking system, a working-paradigm or development-paradigm document, a queue register, round-based work records, or says "治理框架", "建立治理", "开发范式", "登记队列", "建立计划体系", "给这个项目建一套规矩", "bootstrap governance", "set up a dev paradigm", "add a governance scaffold". Also triggers when a repo already has such a framework and the user wants it audited, extended, or has a project where sessions keep losing context between rounds. Use it for solo-maintained, multi-session projects (roughly 5k+ lines, 3+ directories, or 20+ rounds of history) with read-only boundaries or a need for evidence of who approved what. Do NOT use it for one-off scripts, weekend experiments, or small single-file tools (the skill itself will recommend against installing), for projects already well covered by an issue tracker plus CI with per-round PR descriptions, or when the user only wants a longer CLAUDE.md rather than plan containers, ID sequences, and a closed-loop ritual.
+description: A host-agnostic Agent Skill (plain Markdown, no runtime dependencies) that bootstraps a cross-session governance framework into any repository — plan containers, numbered ID sequences, a register/dispatch/execute authorization state machine, deviation and issue ledgers, evidence discipline, and a project constitution written into AGENTS.md. Use when the user asks to set up project governance, a plan/decision tracking system, a working-paradigm or development-paradigm document, a queue register, round-based work records, or says "治理框架", "建立治理", "开发范式", "登记队列", "建立计划体系", "给这个项目建一套规矩", "bootstrap governance", "set up a dev paradigm", "add a governance scaffold". Also triggers when a repo already has such a framework and the user wants it audited, extended, or has a project where sessions keep losing context between rounds. Use it for solo-maintained, multi-session projects (roughly 5k+ lines, 3+ directories, or 20+ rounds of history) with read-only boundaries or a need for evidence of who approved what. Do NOT use it for one-off scripts, weekend experiments, or small single-file tools (the skill itself will recommend against installing), for projects already well covered by an issue tracker plus CI with per-round PR descriptions, or when the user only wants a longer CLAUDE.md rather than plan containers, ID sequences, and a closed-loop ritual.
 license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.4"
+  version: "1.5.5"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -172,7 +172,8 @@ metadata:
 **选定后必须做的三件事**（漏一件就是半成品）：
 
 1. 在 `<GOV_ROOT>/README.md` 的「档位」一节记一行：`治理根：<值>（<日期> 用户选择）`。
-2. 把 `<GOV_ROOT>` 的真实值写进 `AGENTS.md` 宪法段的「默认阅读顺序」首行。
+2. 把 `<GOV_ROOT>` 的真实值写进**宪法段**的「默认阅读顺序」首行
+   （宪法段落 `AGENTS.md` 或 `CLAUDE.md`，由宿主决定，见 §3.0.1 与 `templates/_宪法段模板.md` §五）。
 3. **不要混用** —— 不要出现「治理根在 `governance/`、但某份文档写的是 `docs/governance/`」。
 
 > **反例（实测踩过的）**：本项目把治理根放在仓库根的 `governance/`。
@@ -188,7 +189,8 @@ metadata:
 <GOV_ROOT> = governance          ← 因为 docs/ 已被产品文档站占用
 
 prolab-main/
-├── AGENTS.md                       ← 末尾追加宪法段（不覆盖既有）
+├── AGENTS.md                       ← 末尾追加宪法段（不覆盖既有；
+│                                      宿主只读 CLAUDE.md 时改写到那里）
 ├── governance/                    ← 本 skill 生成的治理根
 │   ├── README.md                  ← 入口：默认阅读顺序
 │   ├── 工作范式.md                 ← 规则的权威载体
@@ -211,7 +213,7 @@ prolab-main/
 |---|---|---|
 | 1 | 把模板标题里的 `<GOV_ROOT>` 换成实际值 | 产物里不得出现字面量 `<GOV_ROOT>` |
 | 2 | 把正文引用里的 `<GOV_ROOT>/` 换成实际路径 | 同上 |
-| 3 | 宪法段的「默认阅读顺序」首行写入实际路径 | 打开 `AGENTS.md` 目视核对 |
+| 3 | 宪法段的「默认阅读顺序」首行写入实际路径 | 打开**宿主会读的那个文件**目视核对 |
 | 4 | 治理根 README 的「档位」节记一行 `治理根：<值>` | 同上 |
 | 5 | **删除模板里所有 `<...>` 给生成者的指令行** | 产物里不得出现 `references/` / `templates/` 路径 |
 | 6 | **落盘编码**：全部产物写 UTF-8 **无 BOM** + **LF** | Python 用 `io.open(..., encoding='utf-8', newline='\n')`；JSON 用 `ensure_ascii=False`。核对：无 `\xef\xbb\xbf` 开头、无 `\r\n` |

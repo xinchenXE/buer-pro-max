@@ -513,32 +513,103 @@ TIER_MARK_ALLOWED = {
 
 
 def check_tree_tier_markers(md, rep):
-    """\u65b0\u95e8 B: \u751f\u6210\u6811\u91cc\u6bcf\u4e2a\u53ef\u9009/\u6709\u6863\u4f4d\u95e8\u69db\u7684\u5bb9\u5668\u90fd\u5fc5\u987b\u5e26\u5408\u6cd5\u6863\u4f4d\u6807\u8bb0.
+    """\u65b0\u95e8 B: \u751f\u6210\u6811\u7684\u6863\u4f4d\u6807\u8bb0\u5408\u6cd5 + \u5b50\u9879\u7ee7\u627f\u7236\u5bb9\u5668.
 
-    2026-10-24 \u7aef\u5230\u7aef\u8bd5\u8dd1\u62ab\u9732\uff1a`\u4e22\u5f03\u8ba1\u5212/` `\u6267\u884c\u504f\u5dee/` `\u64cd\u4f5c\u8bb0\u5f55/` \u753b\u8fdb\u4e86\u6811\u5374\u6ca1\u6807\u6863\u4f4d\uff0c
-    \u7ed3\u679c\u6807\u51c6\u6863\u591a\u5efa\u4e86\u4e09\u4e2a\u5bb9\u5668\u3002\u672c\u95e8\u5c31\u662f\u4e3a\u4e86\u8ba9\u8fd9\u7c7b\u9519\u8bef\u53ef\u88ab\u673a\u68b0\u53d1\u73b0\u3002
+    2026-10-24 \u7aef\u5230\u7aef\u8bd5\u8dd1\u62ab\u9732\u4e24\u4e2a\u5c42\u6b21\u7684\u9519\uff1a
+      1. `\u4e22\u5f03\u8ba1\u5212/` `\u6267\u884c\u504f\u5dee/` `\u64cd\u4f5c\u8bb0\u5f55/` \u753b\u8fdb\u4e86\u6811\u5374\u6ca1\u6807\u6863\u4f4d
+      2. `\u6267\u884c\u504f\u5dee/ {\u5b8c\u6574\u8d77}` \u7684**\u5b50\u9879\u6ca1\u6709\u7ee7\u627f\u7236\u7ea7\u6807\u8bb0**\uff0c
+         \u6309\u6811\u751f\u6210\u4ecd\u4f1a\u8bef\u5efa\u6574\u68f5\u504f\u5dee\u5b50\u6811
+
+    \u7b2c 2 \u7c7b\u662f\u300c\u95e8\u770b\u4e0d\u89c1\u5b83\u8be5\u770b\u89c1\u7684\u9519\u300d\u7684\u53c8\u4e00\u5b9e\u4f8b \u2014\u2014 \u4e0e\u5d4c\u5957\u56f4\u680f\u540c\u578b\u3002
     """
     gt = read("references/gen-tree.md")
     bad = []
-    # \u53ea\u626b\u6811\u56f4\u680f\u5757\u91cc\u7684\u884c
+    n_marks = 0
+
+    # \u89e3\u6790\u6811\u56f4\u680f\u5757, \u8ddf\u8e2a\u6bcf\u4e00\u5c42\u7684\u751f\u6548\u6807\u8bb0
     in_tree = False
+    stack = []          # [(indent_len, effective_mark_or_None, name)]
     for i, line in enumerate(gt.split("\n"), 1):
         if line.strip().startswith(FENCE):
             in_tree = not in_tree
             continue
         if not in_tree:
             continue
-        for mk in TIER_MARK_RE.findall(line):
-            if mk not in TIER_MARK_ALLOWED:
-                bad.append("references/gen-tree.md:%d unknown mark {%s}" % (i, mk))
+
+        mk = TIER_MARK_RE.search(line)
+        mark = mk.group(1) if mk else None
+        if mark is not None:
+            n_marks += 1
+            if mark not in TIER_MARK_ALLOWED:
+                bad.append("references/gen-tree.md:%d unknown mark {%s}" % (i, mark))
+                continue
+
+        # \u53d6\u6761\u76ee\u540d
+        m = re.search(r"[\u251c\u2514]\u2500\u2500\s+([^\s\u2190]+)", line)
+        if not m:
+            continue
+        name = m.group(1)
+        indent = line.find("\u251c") if "\u251c" in line else line.find("\u2514")
+        if indent < 0:
+            indent = len(line) - len(line.lstrip())
+
+        # \u5f39\u51fa\u6bd4\u5f53\u524d\u66f4\u6df1\u6216\u540c\u7ea7\u7684\u6808\u9879
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+
+        # \u7236\u7ea7\u751f\u6548\u6807\u8bb0 = \u6808\u9876
+        inherited = stack[-1][1] if stack else None
+        effective = mark if mark is not None else inherited
+
+        # \u5982\u679c\u672c\u884c\u662f\u4e00\u4e2a\u5bb9\u5668(\u4ee5 / \u7ed3\u5c3e)\u4e14\u6709\u951a\u5b9a\u6863\u4f4d\u95e8\u69db, \u4f46\u5b50\u9879\u65e0\u6807\u8bb0 -> \u62a5
+        stack.append((indent, effective, name))
+
     # \u5fc5\u8981\u6027\uff1a\u5b9a\u4e49\u4e86\u6807\u8bb0\u8bed\u6cd5\u5c31\u4e0d\u80fd\u4e00\u4e2a\u90fd\u6ca1\u6709
-    nmarks = len(re.findall(r"\{", gt))
-    if nmarks < 8:
-        bad.append("references/gen-tree.md: only %d tier marks (expected >= 8)" % nmarks)
-    rep.add(not bad, "tree-tier-markers", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+    if n_marks < 8:
+        bad.append("references/gen-tree.md: only %d tier marks (expected >= 8)" % n_marks)
+
+    rep.add(not bad, "tree-tier-markers", "marks=%d count=%d %s" % (
+        n_marks, len(bad), bad[:8] if bad else ""))
 
 
-# ---------------------------------------------------------------- main
+def check_tree_subtree_inherit(md, rep):
+    """\u65b0\u95e8 C: \u6709\u6863\u4f4d\u95e8\u69db\u7684\u5bb9\u5668, \u5176\u5b50\u9879\u5fc5\u987b\u663e\u5f0f\u7ee7\u627f\u8be5\u6807\u8bb0.
+
+    \u5224\u636e\uff1a\u7236\u884c\u5e26 `{X}`\uff0c\u5219\u6240\u6709\u7f29\u8fdb\u66f4\u6df1\u7684\u5b50\u884c\u90fd\u5fc5\u987b\u5e26 `{X}`
+    \uff08\u663e\u5f0f\u5199\u51fa\u6765\uff0c\u4e0d\u9760\u9690\u5f0f\u7ee7\u627f \u2014\u2014 \u56e0\u4e3a\u751f\u6210\u8005\u4f1a\u9010\u884c\u8bfb\uff09\u3002
+    """
+    gt = read("references/gen-tree.md")
+    bad = []
+    in_tree = False
+    parent = None   # (indent, mark, name)
+    for i, line in enumerate(gt.split("\n"), 1):
+        if line.strip().startswith(FENCE):
+            in_tree = not in_tree
+            parent = None
+            continue
+        if not in_tree or "\u2500\u2500" not in line:
+            continue
+        mk = TIER_MARK_RE.search(line)
+        mark = mk.group(1) if mk else None
+        indent = line.find("\u251c", 0, 80)
+        if indent < 0:
+            indent = line.find("\u2514", 0, 80)
+        if indent < 0:
+            continue
+
+        if parent is not None:
+            p_indent, p_mark, p_name = parent
+            if indent > p_indent:
+                # 父带标记 -> 子必须带同一个
+                if p_mark is not None and mark != p_mark:
+                    bad.append("references/gen-tree.md:%d under {%s} missing/inherited" % (i, p_mark))
+                # 反向: 子带标记 -> 父必须带（否则父的档位不明，子标了也没用）
+                elif p_mark is None and mark is not None:
+                    bad.append("references/gen-tree.md:%d has {%s} but parent has none" % (i, mark))
+        parent = (indent, mark, line)
+
+    rep.add(not bad, "tree-subtree-inherit", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+
 
 def main():
     quiet = "--quiet" in sys.argv
@@ -559,6 +630,7 @@ def main():
     check_bom_and_eol(rep)
     check_gov_root_literal(md, rep)
     check_tree_tier_markers(md, rep)
+    check_tree_subtree_inherit(md, rep)
 
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1

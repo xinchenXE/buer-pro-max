@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.4.0"
+  version: "1.5.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -89,6 +89,9 @@ metadata:
 **三段都要落到可比较的量上**；讲不出量，说明还没想清楚这条值不值。
 用户点头就做，不点头就跳过。**目前有两项**：
 
+- `工作范式.md` §六「环境事实」一节
+- 会话交接件（`登记提示词/`，闭环仪式第 8 件）
+
 ### 1.3 生成前的**强制门**（**逐项打勾才能进 §三**）
 
 > **这一节存在的理由**：`mandatory-vs-optional.md` §六 要求推荐项「**在初始化之前**说明」，
@@ -107,8 +110,6 @@ metadata:
 > **勾完之后才开始建第一个目录。** 顺序反了就是返工 —— 而返工正是这套框架唯一要防的东西。
 
 
-- `工作范式.md` §六「环境事实」一节
-- 会话交接件（`登记提示词/`，闭环仪式第 8 件）
 
 ---
 
@@ -176,6 +177,46 @@ metadata:
 > 如果在生成时保留了模板里写死的 `docs/governance/`，产物里就会同时存在
 > 两套路径，**而且引用完整性门禁抓不到**（它只验路径存在性）。
 > 这正是 `<GOV_ROOT>` 存在的原因。
+
+### 3.0.1 非默认布局的完整示例
+
+下面是一个**治理根放在仓库根**的完整生成结果（端到端试跑实测过）：
+
+```
+<GOV_ROOT> = governance          ← 因为 docs/ 已被产品文档站占用
+
+prolab-main/
+├── AGENTS.md                       ← 末尾追加宪法段（不覆盖既有）
+├── governance/                    ← 本 skill 生成的治理根
+│   ├── README.md                  ← 入口：默认阅读顺序
+│   ├── 工作范式.md                 ← 规则的权威载体
+│   ├── 项目清单/  计划队列/  活跃计划/
+│   ├── 归档计划/  休眠计划/  归档文档/
+│   ├── 问题记录/  代码修改记录/
+│   ├── 证据/  缓存/  快照/          ← 快照：无 VCS 时的唯一退路
+│   └── 登记提示词/                 ← 推荐项，用户已批准
+└── docs/                           ← 不动（Fumadocs 产品文档站）
+```
+
+**注意两件事**：
+
+1. 治理根**不在 `docs/` 下** —— 两树并行，互不干扰。
+2. `快照/` 出现了（因为无 VCS），`工具/` 没出现（未触发）。
+
+### 3.0.2 生成前的**替换清单**（逐项做，不能跳）
+
+| # | 做什么 | 怎么验证 |
+|---|---|---|
+| 1 | 把模板标题里的 `<GOV_ROOT>` 换成实际值 | 产物里不得出现字面量 `<GOV_ROOT>` |
+| 2 | 把正文引用里的 `<GOV_ROOT>/` 换成实际路径 | 同上 |
+| 3 | 宪法段的「默认阅读顺序」首行写入实际路径 | 打开 `AGENTS.md` 目视核对 |
+| 4 | 治理根 README 的「档位」节记一行 `治理根：<值>` | 同上 |
+| 5 | **删除模板里所有 `<...>` 给生成者的指令行** | 产物里不得出现 `references/` / `templates/` 路径 |
+
+> **第 5 项是端到端试跑实测踩到的坑**：生成者会把
+> 「对照表见 skill 的 `references/naming.md`」这类话**原样写进产物**。
+> `template-dead-links` 只扫**模板**，扫不到你手写的产物 —— **这一步只能靠人。**
+
 
 ---
 

@@ -65,9 +65,15 @@ LINE_REF_ALLOW = {
 }
 
 
+# 遍历时跳过的目录 —— .git 里的 pack 文件是二进制, 必然含 CRLF 字节,
+# 不跳过会让 bom-and-eol 在**全新克隆上必然误报**（本地无 pack 时不显形）。
+SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+
+
 def walk_md():
     out = []
-    for dp, _dn, fs in os.walk(ROOT):
+    for dp, dn, fs in os.walk(ROOT):
+        dn[:] = [d for d in dn if d not in SKIP_DIRS]
         for f in fs:
             if f.endswith(".md"):
                 rel = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, "/")
@@ -75,9 +81,17 @@ def walk_md():
     return sorted(out)
 
 
+
 def walk_all():
+    """遍历所有文件, **跳过 .git 等非内容目录**.
+
+    不跳过的话, `bom-and-eol` 会去读 `.git/objects/**/*.pack` ——
+    那是二进制压缩包, 必然含 CRLF 字节, 于是**全新克隆上必然误报**。
+    这个洞是在验证推送结果时被真实发现的（本地仓库没有 pack 文件时不显形）。
+    """
     out = []
-    for dp, _dn, fs in os.walk(ROOT):
+    for dp, dn, fs in os.walk(ROOT):
+        dn[:] = [d for d in dn if d not in SKIP_DIRS]
         for f in fs:
             rel = os.path.relpath(os.path.join(dp, f), ROOT).replace(os.sep, "/")
             out.append(rel)

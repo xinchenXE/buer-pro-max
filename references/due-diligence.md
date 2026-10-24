@@ -120,7 +120,11 @@ ls AGENTS.md CLAUDE.md CONTRIBUTING.md docs/ 2>/dev/null
 find . -maxdepth 2 -name "*.md" -not -path "./node_modules/*" | head -40
 ```
 
-- 已有 `AGENTS.md` / `CLAUDE.md` → **追加**宪法段，不覆盖。记录追加位置的原始行数。
+- **宪法段写到哪，取决于宿主读哪个文件**（见 `templates/_宪法段模板.md` §六）：
+  - 只有 `CLAUDE.md` → 写进 `CLAUDE.md`
+  - 只有 `AGENTS.md` → 写进 `AGENTS.md`，**并新建 `CLAUDE.md` 写 `@AGENTS.md`**
+  - 两者都有 → 写进 `AGENTS.md`，并在 `CLAUDE.md` 补 `@AGENTS.md`
+  **绝不两处各写一份正文**（那是双份记录）。记录追加位置的原始行数。
 - 已有 `docs/` → 治理根嵌进去（`<GOV_ROOT>/`），**不要另起一棵树**。
 - 已有零散的 TODO / ROADMAP / DECISIONS 文件 → 尽调时列出，生成时在 `项目清单/` 里
   给它们**一席之地**（作为历史输入），不要假装它们不存在。

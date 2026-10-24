@@ -242,11 +242,27 @@ def check_orphans(md, rep):
     """除 README/SKILL 外, 每个文件都应至少被另一个文件按文件名提到."""
     bad = []
     corpus = {f: read(f) for f in md}
+    # \u4fee\uff08SC-04\uff09\uff1aREADME \u7684**\u76ee\u5f55\u6811\u56f4\u680f\u5757**\u4e0d\u80fd\u7b97\u300c\u88ab\u5f15\u7528\u300d\u2014\u2014
+    # \u5426\u5219 readme-tree \u95e8\u5f3a\u5236\u6bcf\u4e2a\u6587\u4ef6\u90fd\u51fa\u73b0\u5728\u6811\u91cc\uff0creadme \u5c31\u6052\u771f\u547d\u4e2d\uff0c\u672c\u95e8\u6c38\u8fdc\u4e0d\u4f1a\u7ea2\u3002
+    if "README.md" in corpus:
+        lines = corpus["README.md"].split("\n")
+        keep = []
+        inside = False
+        for ln in lines:
+            if ln.strip().startswith(FENCE):
+                inside = not inside
+                continue
+            if not inside:
+                keep.append(ln)
+        corpus["README.md"] = "\n".join(keep)
     for f in md:
         if f in ("README.md", "SKILL.md"):
             continue
         base = os.path.basename(f)
-        others = [g for g in md if g != f and base in corpus[g]]
+        # \u540c\u65f6\u63a5\u53d7\u4e24\u79cd\u5f15\u7528\u5f62\u6001\uff1a
+        #   `_xxx\u6a21\u677f.md`\uff08\u5e26\u6269\u5c55\u540d\uff09\u4e0e `[_xxx\u6a21\u677f]`\uff08\u6811\u91cc\u7684\u62ec\u53f7\u5f15\u7528\uff0c\u65e0\u6269\u5c55\u540d\uff09
+        stem = base[:-3] if base.endswith(".md") else base
+        others = [g for g in md if g != f and (base in corpus[g] or stem in corpus[g])]
         if not others:
             bad.append(f)
     rep.add(not bad, "orphan-files", "count=%d %s" % (len(bad), bad or ""))
@@ -573,45 +589,123 @@ def check_tree_tier_markers(md, rep):
 
 
 def check_tree_subtree_inherit(md, rep):
-    """\u65b0\u95e8 C: \u6709\u6863\u4f4d\u95e8\u69db\u7684\u5bb9\u5668, \u5176\u5b50\u9879\u5fc5\u987b\u663e\u5f0f\u7ee7\u627f\u8be5\u6807\u8bb0.
+    """\u65b0\u95e8 C: \u5bb9\u5668\u7684\u5168\u90e8\u540e\u4ee3\u5fc5\u987b\u663e\u5f0f\u7ee7\u627f\u8be5\u5bb9\u5668\u7684\u6863\u4f4d\u6807\u8bb0.
 
-    \u5224\u636e\uff1a\u7236\u884c\u5e26 `{X}`\uff0c\u5219\u6240\u6709\u7f29\u8fdb\u66f4\u6df1\u7684\u5b50\u884c\u90fd\u5fc5\u987b\u5e26 `{X}`
-    \uff08\u663e\u5f0f\u5199\u51fa\u6765\uff0c\u4e0d\u9760\u9690\u5f0f\u7ee7\u627f \u2014\u2014 \u56e0\u4e3a\u751f\u6210\u8005\u4f1a\u9010\u884c\u8bfb\uff09\u3002
+    **2026-10-24 \u4fee**\uff1a\u65e7\u5b9e\u73b0\u53ea\u6bd4\u8f83\u76f8\u90bb\u884c\uff0c\u4e8e\u662f\u53ea\u80fd\u6293\u5230\u6bcf\u4e2a\u5bb9\u5668\u7684**\u7b2c\u4e00\u4e2a**\u5b50\u9879\u3002
+    \u7b2c 2 \u4e2a\u8d77\u7684\u5144\u5f1f\u5168\u90e8\u6f0f\u68c0\u3002\u73b0\u6539\u7528**\u7f29\u8fdb\u6808**\uff0c\u53d6\u6700\u8fd1\u7684\u771f\u6b63\u7956\u5148\u3002
     """
     gt = read("references/gen-tree.md")
     bad = []
     in_tree = False
-    parent = None   # (indent, mark, name)
+    stack = []      # [(indent, mark, name)]
+
     for i, line in enumerate(gt.split("\n"), 1):
         if line.strip().startswith(FENCE):
             in_tree = not in_tree
-            parent = None
+            stack = []
             continue
         if not in_tree or "\u2500\u2500" not in line:
             continue
         mk = TIER_MARK_RE.search(line)
         mark = mk.group(1) if mk else None
-        indent = line.find("\u251c", 0, 80)
+
+        indent = line.find("\u251c")
         if indent < 0:
-            indent = line.find("\u2514", 0, 80)
+            indent = line.find("\u2514")
         if indent < 0:
             continue
 
-        if parent is not None:
-            p_indent, p_mark, p_name = parent
-            if indent > p_indent:
-                # 父带标记 -> 子必须带同一个
-                if p_mark is not None and mark != p_mark:
-                    bad.append("references/gen-tree.md:%d under {%s} missing/inherited" % (i, p_mark))
-                # 反向: 子带标记 -> 父必须带（否则父的档位不明，子标了也没用）
-                elif p_mark is None and mark is not None:
-                    bad.append("references/gen-tree.md:%d has {%s} but parent has none" % (i, mark))
-        parent = (indent, mark, line)
+        # \u5f39\u51fa\u6240\u6709\u7f29\u8fdb >= \u5f53\u524d\u7684\u6808\u9879 -> \u6808\u9876\u5c31\u662f\u771f\u6b63\u7956\u5148
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+
+        if stack:
+            p_indent, p_mark, p_name = stack[-1]
+            if p_mark is not None and mark != p_mark:
+                bad.append("references/gen-tree.md:%d under {%s} (from %s)" % (i, p_mark, p_name))
+            elif p_mark is None and mark is not None:
+                # \u5b50\u5e26\u6807\u8bb0\u4f46\u7956\u5148\u65e0\u6807\u8bb0\u3002
+                # **\u6839\u5bb9\u5668\u8c41\u514d**\uff1a<GOV_ROOT>/ \u4e0e <\u9879\u76ee\u6839>/ \u672c\u8eab\u4e0d\u5c5e\u4e8e\u4efb\u4f55\u6863\u4f4d\uff0c
+                # \u5b83\u7684\u5b50\u9879\u5404\u81ea\u5e26\u6863\u4f4d\u662f\u6b63\u786e\u7684\u3002
+                is_root = ('<GOV_ROOT>' in p_name) or ('\u9879\u76ee\u6839' in p_name)
+                if not is_root:
+                    bad.append("references/gen-tree.md:%d has {%s} but ancestor %s has none" % (i, mark, p_name))
+
+        stack.append((indent, mark, line.strip()[:40]))
 
     rep.add(not bad, "tree-subtree-inherit", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
 
 
+def check_tier_table_consistency(md, rep):
+    """新门 D: 生成树的档位标记必须与 tier-selection.md §一 的权威表一致.
+
+    这是 2026-10-24 扫描报告里 ~28 条发现的根因门：
+    tree-tier-markers 只验语汇合法，tree-subtree-inherit 只验继承，
+    两者都不读档位表。于是 AGENTS.md 标错、问题记录漏标全部照常放行。
+    """
+    gt = read("references/gen-tree.md")
+    bad = []
+
+    rows = []
+    in_tree = False
+    for i, line in enumerate(gt.split("\n"), 1):
+        if line.strip().startswith(FENCE):
+            in_tree = not in_tree
+            continue
+        if in_tree and "\u2500\u2500" in line:
+            mk = TIER_MARK_RE.search(line)
+            rows.append((i, line, mk.group(1) if mk else None))
+
+    def find_row(sub):
+        for i, line, mk in rows:
+            if sub in line:
+                return i, line, mk
+        return None
+
+    # 1) AGENTS.md 不得带 {标准起}（轻量档也要写宪法段）
+    r = find_row("AGENTS.md")
+    if r and r[2] == "\u6807\u51c6\u8d77":
+        bad.append("gen-tree.md:%d AGENTS.md must NOT be standard-tier-only" % r[0])
+
+    # 2) 问题记录/ 与 代码修改记录/ 必须带档位标记
+    for name in ("\u95ee\u9898\u8bb0\u5f55/", "\u4ee3\u7801\u4fee\u6539\u8bb0\u5f55/"):
+        r = find_row(name)
+        if r and r[2] is None:
+            bad.append("gen-tree.md:%d %s unmarked; tier table says standard" % (r[0], name))
+
+    # 3) 工具/ 必须是完整档起
+    r = find_row("\u5de5\u5177/")
+    if r and r[2] and not r[2].startswith("\u5b8c\u6574\u8d77"):
+        bad.append("gen-tree.md:%d tools should be full-tier, got {%s}" % (r[0], r[2]))
+
+    # 4) 缓存/ 不得带档位门槛（轻量「视需要」）
+    r = find_row("\u7f13\u5b58/")
+    if r and r[2] and r[2].startswith("\u6807\u51c6"):
+        bad.append("gen-tree.md:%d cache must not be standard-tier-only" % r[0])
+
+    # 5) 树里的每种标记都必须出现在图例表
+    legend = set()
+    in_legend = False
+    for line in gt.split("\n"):
+        if "\u6807\u8bb0\u600e\u4e48\u8bfb" in line:
+            in_legend = True
+            continue
+        if in_legend:
+            if line.startswith("**") or line.startswith("---"):
+                break
+            for m in re.findall(r"`\{([^{}`]+)\}`", line):
+                legend.add(m.strip())
+    if legend:
+        for i, line, mk in rows:
+            if mk and mk not in legend:
+                bad.append("gen-tree.md:%d mark {%s} missing from legend" % (i, mk))
+
+    rep.add(not bad, "tier-table-consistency",
+            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+
+
 def main():
+
     quiet = "--quiet" in sys.argv
     md = walk_md()
     rep = Report()
@@ -631,7 +725,10 @@ def main():
     check_gov_root_literal(md, rep)
     check_tree_tier_markers(md, rep)
     check_tree_subtree_inherit(md, rep)
+    check_tier_table_consistency(md, rep)
 
+    if len(rep.rows) < 15:
+        rep.add(False, "gate-count", "only %d gates (<15)" % len(rep.rows))
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1
 

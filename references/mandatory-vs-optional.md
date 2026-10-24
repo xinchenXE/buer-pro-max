@@ -202,7 +202,7 @@
 | `completion-ritual.md` | §一 §二 | §三 完整/重型档 · §四 有需人工判断的验证 |
 | `gates-and-holds.md` | §一 §二 §三 §四 §五 | — |
 | `doc-sync-discipline.md` | §一–§九（全） | — |
-| `anti-patterns.md` | #1 #2 #3 #4 #5 #6 #7 #8 #9 #10 #11 #12 #13 #14 #15 #16 | **#17 推荐** |
+| `anti-patterns.md` | #1–#16 **+#18 #19 #20** | **#17 推荐** |
 | `session-handoff.md` | — | **推荐**（走 §六 流程）；轻量档若跳过，退化为索引里的「下一步」小节 |
 | `tier-selection.md` | — | 档位判定流程，不落进生成件 |
 | `due-diligence.md` | — | 初始化流程，不落进生成件 |

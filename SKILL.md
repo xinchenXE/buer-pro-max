@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.0"
+  version: "1.5.1"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -278,7 +278,7 @@ prolab-main/
 | **门禁脚本怎么实现**（文档基线同步 / 引用完整性 / 快照 / 走查包装的契约） | `references/tool-contracts.md` |
 | **哪些规则必选、哪些可选**（触发条件索引；生成时按它裁剪） | `references/mandatory-vs-optional.md` |
 | **产物用中文还是英文命名**（生成前问用户；两套对照表） | `references/naming.md` |
-| **维护本 skill 自身**（只改这 39 份 md 时用，**不作用于目标项目**） | `scripts/selfcheck.py` |
+| **维护本 skill 自身**（只改本 skill 的 md 时用，**不作用于目标项目**） | `scripts/selfcheck.py` |
 
 模板在 `templates/`，按上面 §三 的树对号入座。每个模板的头部注释说明它**为什么存在**与**什么时候不该用**。
 

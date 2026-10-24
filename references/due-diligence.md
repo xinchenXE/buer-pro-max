@@ -118,7 +118,30 @@ ls .github/workflows/ .gitlab-ci.yml .circleci/ 2>/dev/null
 ```sh
 ls AGENTS.md CLAUDE.md CONTRIBUTING.md docs/ 2>/dev/null
 find . -maxdepth 2 -name "*.md" -not -path "./node_modules/*" | head -40
+# 工作区 vs HEAD：既有治理体系是否"已存在但被删掉/尚未检出"
+git -c core.quotepath=false ls-tree -r --name-only HEAD 2>/dev/null \
+  | grep -E '^(AGENTS\.md|CLAUDE\.md|docs/|governance/|执行计划/)' | head -20
+git status --porcelain 2>/dev/null | awk '{print $1}' | sort | uniq -c
 ```
+
+### 4.0 **先判「已有治理体系」是否真的不存在**（**这一步不能跳**）
+
+>`ls` 看不到 ≠ 不存在。最危险的形态是：**HEAD 里有一整套跑了 N 轮的治理树，工作区里却已删光**
+>（删除未提交 / 换分支 / 解压覆盖）。此时照「新项目」生成，会得到**两套并存的治理树** ——
+> 正是 `anti-patterns.md` 反复警告的反模式，而且**没有任何门禁会红**。
+
+**判据**：
+
+| 探测结果 | 含义 | 必须先做的事 |
+|---|---|---|
+| `ls` 有 `AGENTS.md` / `<GOV_ROOT>/` | 已有治理体系 | 走 **审计模式**（`audit-and-evolve.md`），不重建 |
+| `ls` 没有，但 `git ls-tree HEAD` 命中 | **已存在但被删/未检出** | **停**，把「HEAD 里有 N 个文件、工作区 0 个」如实报给用户，**由用户裁决**：恢复审计 / 封存重建 / 直接重建 |
+| `git status` 里出现成批 `D`（几十上百） | 同上，且删除**未提交** | 同上一行；**不要**`git checkout -- .`「顺手恢复」 |
+| 两边都没有 | 真的是新项目 | 按 §一 继续 |
+
+**封存重建时**（用户选了这条路）：先把旧树**完整导出**到**仓库外**
+（`git archive` 到 zip），记下条目数 / 字节数 / SHA-256，再建新体系。
+**不要在仓库里留旧树的副本** —— 两棵树并存比丢历史更糟。
 
 - **宪法段写到哪，取决于宿主读哪个文件**（见 `templates/_宪法段模板.md` §六）：
   - 只有 `CLAUDE.md` → 写进 `CLAUDE.md`

@@ -725,6 +725,99 @@ def check_container_readme_sections(md, rep):
     rep.add(not bad, "container-readme-sections",
             "count=%d %s" % (len(bad), bad[:6] if bad else ""))
 
+
+# --- 序数一致性 -------------------------------------------------------------
+# 2026-10-24 端到端试跑暴露：完成宣告的「第 4 步 / 第 5 步」在不同模板里指反了东西，
+# 而当时 17 门全绿。原因是 17 门里**没有任何一门解析序数词**：
+# count-claims 只数模板数与 anti-patterns 条数，不校验「第 N 步是哪一步」。
+#
+# 判据用**性质**而不是名单：只要某行同时出现「完成宣告」与「第 N 步」，
+# 它声称的那一步就必须与权威表（completion-ritual.md §一）一致：
+#   第 1 步 = 计划内勾选 / 第 2 步 = 逐轮记录 / 第 3 步 = 索引「最近 N 轮」
+#   第 4 步 = 代码地图同步 / 第 5 步 = 归档 / 第 6 步 = 修改记录 / 第 7 步 = 收尾快照
+# 判据词表只用来判断「这句话在说哪一步」，不要求措辞完全一致。
+ORDINAL_STEPS = {
+    1: ("计划", "勾选", "验证记录", "偏差记录"),
+    2: ("逐轮", "轮次章节", "项目总结"),
+    3: ("索引", "最近"),
+    4: ("代码地图", "可写范围", "文件作用", "代码结构"),
+    5: ("归档",),
+    6: ("修改记录",),
+    7: ("快照",),
+}
+ORDINAL_LINE_RE = re.compile(
+    r"(完成宣告|闭环仪式)[^\n]{0,24}第\s*(\d+)\s*步"
+    # 并列写法：「完成宣告的第 3 步与第 4 步」—— 后半截没有重提前缀词，
+    # 不单独匹配就会**整句漏检**（2026-10-24 试跑实测）。
+    r"(?:\s*[与和、/]\s*第\s*(\d+)\s*步){0,2}"
+)
+ORDINAL_SKIP = {
+    # 这份是「步数表本身」的定义处，里面的每句话都在给第 N 步下定义，
+    # 不需要拿它自己的词表去校验它自己。
+    "references/core/completion-ritual.md",
+}
+
+
+def _ordinal_claim_ok(window, n):
+    words = ORDINAL_STEPS.get(n)
+    if not words:
+        return True  # 步数超出表：不判（步数表将来可能扩），交给别的门
+    return any(w in window for w in words)
+
+
+def check_ordinal_consistency(md, rep):
+    """完成宣告/闭环仪式里出现的「第 N 步」必须与权威步数表一致.
+
+    判据用**性质**：不是比对措辞，而是检查「第 N 步」在同一段落窗口里
+    是否配上了那一步的**主题词**。窗口取**上文 3 行 + 本行**，**不含下文**：
+
+    - 主题词常出现在**标题行或列表项**，正文与它之间可能隔着 1–3 行说明；
+    - **不含下文**是牙齿验证的结果 —— 窗口取 ±4 时，相邻树节点里的
+      「归档计划」会被算作第 5 步的主题词，于是「第 5 步」的错误写法被放过（假阴性）。
+    """
+    bad = []
+    for f in md:
+        if f in ORDINAL_SKIP:
+            continue
+        lines = read(f).split("\n")
+        for idx, line in enumerate(lines):
+            for m in ORDINAL_LINE_RE.finditer(line):
+                window = "\n".join(lines[max(0, idx - 3): idx + 1])
+                for g in range(2, len(m.groups()) + 1):
+                    if not m.group(g):
+                        continue
+                    n = int(m.group(g))
+                    if not _ordinal_claim_ok(window, n):
+                        bad.append("%s:%d 第%d步" % (f, idx + 1, n))
+    rep.add(not bad, "ordinal-consistency",
+            "count=%d %s" % (len(bad), bad[:8] if bad else ""))
+
+
+def check_template_machine_facts(md, rep):
+    """生成件模板里不得留下**未标注例外**的本机事实.
+
+    2026-10-24 试跑暴露：`self-check.md` 禁止生成件含本机路径/端口，
+    但 `_工作范式模板.md` §六 又要求写实测的路径与端口 —— 两条互相打架。
+    结论是**例外必须写在规则里**（已补 `self-check.md` 的「例外二」），
+    本门只守一条可机械判定的边界：**模板里的绝对盘符路径**（`X:\\...`）必须是不存在的示例，
+    或所在文件显式声明了「环境事实」例外。
+
+    判据用性质：盘符路径永远不通用，一旦被原样抄进生成件就是本机事实泄漏。
+    """
+    drive_re = re.compile(r"[A-Za-z]:\\[^\s`|)]+")
+    bad = []
+    for f in md:
+        if not f.startswith("templates/"):
+            continue
+        text = read(f)
+        if "环境事实" in text:      # 该模板本身就在讲「实测环境事实」
+            continue
+        for lineno, line in enumerate(text.split("\n"), 1):
+            if drive_re.search(line):
+                bad.append("%s:%d" % (f, lineno))
+    rep.add(not bad, "template-machine-facts",
+            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+
 def main():
 
     quiet = "--quiet" in sys.argv
@@ -748,9 +841,11 @@ def main():
     check_tree_subtree_inherit(md, rep)
     check_tier_table_consistency(md, rep)
     check_container_readme_sections(md, rep)
+    check_ordinal_consistency(md, rep)
+    check_template_machine_facts(md, rep)
 
-    if len(rep.rows) < 16:
-        rep.add(False, "gate-count", "only %d gates (<16)" % len(rep.rows))
+    if len(rep.rows) < 18:
+        rep.add(False, "gate-count", "only %d gates (<18)" % len(rep.rows))
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1
 

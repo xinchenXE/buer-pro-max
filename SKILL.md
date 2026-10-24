@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.2"
+  version: "1.5.3"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -79,7 +79,7 @@ metadata:
 5. **「治理文档的目录和文件名，用中文还是英文？」** —— 默认**中文**；目标仓库是英文项目 / 需跨语区分发 / 有 CI 处理路径时建议**英文**。选定后整棵树只用那一套，**不要混用**。对照表见 `references/naming.md`。
 6. **「治理根放在哪？」** —— 默认 `docs/governance`；若 `docs/` 已被产品文档站占用（Fumadocs / VitePress / Docusaurus），建议放仓库根的 `governance/`。**这就是 `<GOV_ROOT>` 的值**，定义见 §3.0。
 
-**另外还有「推荐项」——它不是提问，不要混进上面四条**（见 `references/mandatory-vs-optional.md` §六）
+**另外还有「推荐项」——它不是提问，不要混进上面六条**（见 `references/mandatory-vs-optional.md` §六）
 **在初始化前连同尽调结论一起说明**。**每一项必须讲全三段，缺一不可**：
 
 **① 为什么推荐**（防什么，具体到会怎么返工 / 会花多久）·
@@ -90,7 +90,7 @@ metadata:
 用户点头就做，不点头就跳过。**目前有两项**：
 
 - `工作范式.md` §六「环境事实」一节
-- 会话交接件（`登记提示词/`，闭环仪式第 8 件）
+- 会话交接件（`登记提示词/`，**完整档闭环的「第 8 件」独立步骤**，不在 3/5/7 步数表内）
 
 ### 1.3 生成前的**强制门**（**逐项打勾才能进 §三**）
 
@@ -123,7 +123,7 @@ metadata:
 | | **微型** | **轻量** | **标准** | **完整** | **重型** |
 |---|---|---|---|---|---|
 | **适用** | 单文件脚本 / 周末实验 | 单人小工具或库 | 单人/小团队主力项目 | 跨会话长周期产品 | 多仓库 / 多角色 / 有发布与合规 |
-| **判据** | 1–2 个源文件，不打算回来维护 | < 5k 行；无外部上游；改动面 1 个目录 | 5k–50k 行；2–3 个目录；跨会话 | > 50k 行，或 > 20 轮历史 | 多个维护者；发布列车；审计要求 |
+| **判据** | 1–2 个源文件，不打算回来维护 | < 5k 行；无外部上游；改动面 1 个目录 | 5k–50k 行；2–3 个目录；跨会话 | > 50k 行，**或**已有 ≥ 20 轮**治理轮次**（有逐轮记录的轮，不是提交数） | 多个维护者；发布列车；审计要求 |
 | **计划容器** | 无 | 活跃 / 归档 | + 休眠 / 归档文档 | 全部五个 | 全部五个 + 按流向分子目录 |
 | **ID 序列** | 无 | 队列 + 轮次 | + 问题 | + 偏差（四序列） | 四序列 + 命名空间前缀 |
 | **台账** | 无 | 队列总表 | + 问题记录 / 修改记录 | + 偏差总账 / 操作记录 | + 审计台账 / 发布台账 |
@@ -212,6 +212,7 @@ prolab-main/
 | 3 | 宪法段的「默认阅读顺序」首行写入实际路径 | 打开 `AGENTS.md` 目视核对 |
 | 4 | 治理根 README 的「档位」节记一行 `治理根：<值>` | 同上 |
 | 5 | **删除模板里所有 `<...>` 给生成者的指令行** | 产物里不得出现 `references/` / `templates/` 路径 |
+| 6 | **落盘编码**：全部产物写 UTF-8 **无 BOM** + **LF** | Python 用 `io.open(..., encoding='utf-8', newline='\n')`；JSON 用 `ensure_ascii=False`。核对：无 `\xef\xbb\xbf` 开头、无 `\r\n` |
 
 > **第 5 项是端到端试跑实测踩到的坑**：生成者会把
 > 「对照表见 skill 的 `references/naming.md`」这类话**原样写进产物**。

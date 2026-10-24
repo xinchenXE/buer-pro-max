@@ -704,6 +704,27 @@ def check_tier_table_consistency(md, rep):
             "count=%d %s" % (len(bad), bad[:6] if bad else ""))
 
 
+def check_container_readme_sections(md, rep):
+    """新门 E: 每个容器 README 模板都必须写「不在这里放什么」.
+
+    2026-10-31 端到端试跑暴露：`_容器README模板.md` 有这一节，
+    但 `_活跃计划README模板` / `_项目清单README模板` / `_治理根README模板` 三份**都没有**。
+    而「每个容器都要有 README，写清放什么/怎么进/怎么出/不在这里放什么」是核心纪律。
+
+    判据：templates/ 下所有 `*README*模板.md` 必须含该节标题。
+    """
+    bad = []
+    for f in md:
+        base = f.split("/")[-1]
+        if not f.startswith("templates/"):
+            continue
+        if "README" not in base:
+            continue
+        if "不在这里放什么" not in read(f):
+            bad.append(f)
+    rep.add(not bad, "container-readme-sections",
+            "count=%d %s" % (len(bad), bad[:6] if bad else ""))
+
 def main():
 
     quiet = "--quiet" in sys.argv
@@ -726,9 +747,10 @@ def main():
     check_tree_tier_markers(md, rep)
     check_tree_subtree_inherit(md, rep)
     check_tier_table_consistency(md, rep)
+    check_container_readme_sections(md, rep)
 
-    if len(rep.rows) < 15:
-        rep.add(False, "gate-count", "only %d gates (<15)" % len(rep.rows))
+    if len(rep.rows) < 16:
+        rep.add(False, "gate-count", "only %d gates (<16)" % len(rep.rows))
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1
 

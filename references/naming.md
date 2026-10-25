@@ -23,7 +23,7 @@
 
 ## 二、什么时候问
 
-**尽调 §1.2 的第 5 条提问**（`SKILL.md` §一 与 `references/due-diligence.md` §二 同步）：
+**尽调 §1.2 的第 5 问**（`SKILL.md` §一 与 `references/due-diligence.md` §二 同步）：
 
 > **「治理文档的目录和文件名，用中文还是英文？」**
 >

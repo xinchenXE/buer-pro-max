@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.5"
+  version: "1.5.6"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）

@@ -55,10 +55,19 @@ LEAKED_LINE_RE = re.compile(
 )
 
 # F3: 真行号引用. 允许清单只含刻意示例.
+#
+# 覆盖范围只有两种: `xxx.md:NNN` 与 `（LNN）` / `（LNN–LNN）`.
+# **代码文件的 `file.ts:161` 不在扫描面内** —— 扩到这里会让行号漂移的噪音
+# 淹没真问题; 代码行号靠 doc-sync-discipline §四 的纪律兜. 这一句必须与
+# references/tool-contracts.md §二「局限」保持一致.
+#
+# 裸层名 `（L1）` / `（L0–L5）` 不是行号: 要求 L 后**至少两位数字**,
+# 否则任何写「L1/L2」的文档都会误红 (2026-10-25 实测). 两位起仍能覆盖
+# L10..L9999 这类真引用.
 LINE_REF_RE = re.compile(
     r"([A-Za-z0-9_./" + CJK + r"\-]+\.md)\s*:\s*(\d{1,4})"
-    r"|（\s*L\d{1,4}\s*[–\-~]\s*L?\d{1,4}\s*）"
-    r"|（\s*L\d{1,4}\s*）"
+    r"|（\s*L\d{2,4}\s*[–\-~]\s*L?\d{2,4}\s*）"
+    r"|（\s*L\d{2,4}\s*）"
 )
 LINE_REF_ALLOW = {
     "references/tool-contracts.md",  # 刻意示例: 讲「行号会漂」时举的 file.ts:161
@@ -234,6 +243,11 @@ def check_path_refs(md, rep):
             total += 1
             if not os.path.exists(os.path.join(ROOT, fname)):
                 bad.append("%s -> %s" % (f, fname))
+    # 0 个受检对象 != 0 个坏的 (anti-patterns #26 防 2).
+    # 语料里一个引用都没解析出来, 只能是扫描面/正则坏了 —— 必须报错,
+    # 不能把「查了 0 个」当成「0 个都有问题」而 PASS.
+    if total == 0:
+        bad.append("NO applicable references matched (scan root empty or regex broken?)")
     rep.add(not bad, "path-refs-exist",
             "checked=%d bad=%d %s" % (total, len(bad), bad or ""))
 
@@ -262,7 +276,14 @@ def check_orphans(md, rep):
         # \u540c\u65f6\u63a5\u53d7\u4e24\u79cd\u5f15\u7528\u5f62\u6001\uff1a
         #   `_xxx\u6a21\u677f.md`\uff08\u5e26\u6269\u5c55\u540d\uff09\u4e0e `[_xxx\u6a21\u677f]`\uff08\u6811\u91cc\u7684\u62ec\u53f7\u5f15\u7528\uff0c\u65e0\u6269\u5c55\u540d\uff09
         stem = base[:-3] if base.endswith(".md") else base
-        others = [g for g in md if g != f and (base in corpus[g] or stem in corpus[g])]
+        # **\u5fc5\u987b\u5e26\u8bcd\u8fb9\u754c**\uff1a\u65e7\u7248\u7528\u88f8\u5b50\u4e32 `base in corpus[g]`\uff0c\u4e8e\u662f
+        # `_\u8bb0\u5f55\u6a21\u677f` \u4f1a\u547d\u4e2d `_\u64cd\u4f5c\u8bb0\u5f55\u6a21\u677f` \u7684\u5185\u90e8\u3001`README.md` \u4f1a\u88ab\u4efb\u4f55
+        # \u540d\u4e3a README \u7684\u6587\u6863\u300c\u5f15\u7528\u300d\u2014\u2014 \u4e0e #21\u300c\u8bed\u6599\u5305\u542b\u88ab\u4fdd\u62a4\u6587\u6863\u300d\u540c\u578b\u7684\u5047\u7eff\u3002
+        # 2026-10-25 \u5b9e\u6d4b\uff1a\u6539\u6210\u8bcd\u8fb9\u754c\u540e\u5168\u5e93\u5b64\u513f\u4ecd\u4e3a 0\uff0c\u8bf4\u660e\u5b83\u53ea\u6536\u7d27\u4e0d\u8bef\u4f24\u3002
+        pats = [re.compile(r"(?<![\w-])" + re.escape(x) + r"(?![\w-])")
+                for x in (base, stem)]
+        others = [g for g in md
+                  if g != f and any(p.search(corpus[g]) for p in pats)]
         if not others:
             bad.append(f)
     rep.add(not bad, "orphan-files", "count=%d %s" % (len(bad), bad or ""))
@@ -984,11 +1005,17 @@ def main():
     except Exception as exc:
         rep.add(False, "template-machine-facts", "gate crashed: %s: %s" % (type(exc).__name__, exc))
 
-    # 按**门名**断言，而不是数行数 —— 数行数时删掉一门仍等于阈值，整次运行照样 exit 0。
+    # 按**门名集合**断言，既防静默删门，也防新门漏登记 —— 数行数时删一门
+    # 仍等于阈值，整次运行照样 exit 0（#26 防 5）。
+    # 旧版只查 `EXPECTED_GATES ⊆ 实际`, 于是「新增门但忘了登记」照样绿;
+    # 现在要求两者**集合相等**, 差集任一方向非空都红.
     names = [n for _, n, _ in rep.rows]
-    missing = [g for g in EXPECTED_GATES if g not in names]
-    if missing:
-        rep.add(False, "gate-count", "missing gates: %s" % missing)
+    missing = sorted(set(EXPECTED_GATES) - set(names))
+    # gate-count 是本函数自己的条件行, 只在有差异时 append, 不参与集合比较.
+    unexpected = sorted(set(names) - set(EXPECTED_GATES) - {"gate-count"})
+    if missing or unexpected:
+        rep.add(False, "gate-count",
+                "missing=%s unexpected=%s" % (missing or "none", unexpected or "none"))
     rep.dump(quiet)
     return 0 if rep.failed == 0 else 1
 

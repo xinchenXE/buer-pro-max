@@ -1057,6 +1057,66 @@ def _has_section(body, sec):
     return False
 
 
+GATE_TABLE_AUTHORITY = "references/core/gates-and-holds.md"
+GATE_TABLE_GENERATED = "templates/_尽调结论模板.md"
+# 允许的门禁表结构族。**只认表头字面**, 不认列数 —— 列数相同但列义不同,
+# 照样是漂移 (例如把「日志落点」换成「备注」).
+GATE_TABLE_SCHEMAS = {
+    "full": ["#", "门禁", "命令", "通过判据", "探测不可得时",
+             "红了的自愈出口", "日志落点"],
+    "summary-3col": ["#", "门禁", "命令"],
+}
+
+
+def _table_header_after(lines, idx):
+    """idx 指向表头行, 返回其单元格列表 (已去空白与 **加粗** 标记)."""
+    cells = [c.strip() for c in lines[idx].strip().strip("|").split("|")]
+    return [c.replace("**", "").strip() for c in cells]
+
+
+def check_gate_table_schema(md, rep):
+    """门禁表在多个载体里必须同构, 且只有两种被认可的 schema.
+
+    2026-10-25 实测: 门禁表曾有 2 个 5 列载体 + 2 个 3 列载体, 四种结构并存。
+    只改其中一处时, 其余载体静默分叉 —— 生成出来的表与权威表列的**含义不同**,
+    但两处都「有表」, 没有任何门能发现。
+
+    判据 (用性质, 不认文件名):
+      1. 每个以 `| # | 门禁 |` 开头的表, 其表头必须**逐字**等于某个已登记 schema;
+      2. 权威载体与生成件**必须同为 full schema** (两者是同一张表的两个副本);
+      3. 一个门禁表都找不到 -> 红 (扫描面或识别逻辑坏了).
+    """
+    bad = []
+    found = 0
+    headers = {}
+    for f in md:
+        lines = read(f).split("\n")
+        for i, line in enumerate(lines):
+            s = line.strip()
+            if not (s.startswith("|") and "门禁" in s and "#" in s):
+                continue
+            cells = _table_header_after(lines, i)
+            if not cells or cells[0] != "#" or cells[1] != "门禁":
+                continue
+            found += 1
+            headers[f] = cells
+            if cells not in GATE_TABLE_SCHEMAS.values():
+                bad.append("%s:%d unrecognized gate-table schema %s" % (f, i + 1, cells))
+    if found == 0:
+        bad.append("NO gate tables found (header changed?)")
+    full = GATE_TABLE_SCHEMAS["full"]
+    for f in (GATE_TABLE_AUTHORITY, GATE_TABLE_GENERATED):
+        if f not in headers:
+            bad.append("missing gate table in %s" % f)
+        elif headers[f] != full:
+            bad.append("%s gate table is not the full schema" % f)
+    rep.add(not bad, "gate-table-schema",
+            "tables=%d schemas=%s bad=%d %s" % (
+                found,
+                ",".join(str(x) for x in sorted({len(v) for v in headers.values()})),
+                len(bad), bad[:5] if bad else ""))
+
+
 def check_anti_pattern_fixation(md, rep):
     """每条 anti-pattern 必须声明**带类型的固化载体**, 且载体真实存在.
 
@@ -1150,7 +1210,7 @@ EXPECTED_GATES = [
     "gov-root-literal", "tree-tier-markers", "tree-subtree-inherit",
     "tier-table-consistency", "container-readme-sections",
     "ordinal-consistency", "template-machine-facts", "table-shape",
-    "anti-pattern-fixation",
+    "anti-pattern-fixation", "gate-table-schema",
 ]
 
 
@@ -1244,6 +1304,10 @@ def main():
         check_anti_pattern_fixation(md, rep)
     except Exception as exc:
         rep.add(False, "anti-pattern-fixation", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_gate_table_schema(md, rep)
+    except Exception as exc:
+        rep.add(False, "gate-table-schema", "gate crashed: %s: %s" % (type(exc).__name__, exc))
 
     # 按**门名集合**断言，既防静默删门，也防新门漏登记 —— 数行数时删一门
     # 仍等于阈值，整次运行照样 exit 0（#26 防 5）。

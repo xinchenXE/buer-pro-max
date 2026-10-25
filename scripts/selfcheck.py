@@ -253,43 +253,52 @@ def check_path_refs(md, rep):
 
 
 def check_orphans(md, rep):
-    """除 README/SKILL 外, 每个文件都应至少被另一个文件按文件名提到."""
+    """除 README/SKILL 外, 每个文件都应至少被另一个文件按**唯一可识别的名字**提到.
+
+    判据用**性质**: 名字只有在全库唯一时才能单独指代文件; 重名时必须写路径
+    (`templates/naming.md`), 否则就是「谁都能被它指」的假绿 —— 与 #21 同型.
+
+    README 的**目录树围栏块**不算「被引用」: readme-tree 门强制每个文件都出现在
+    树里, 若把它算进语料, 本门就恒真命中、永远不会红.
+    """
     bad = []
     corpus = {f: read(f) for f in md}
-    # \u4fee\uff08SC-04\uff09\uff1aREADME \u7684**\u76ee\u5f55\u6811\u56f4\u680f\u5757**\u4e0d\u80fd\u7b97\u300c\u88ab\u5f15\u7528\u300d\u2014\u2014
-    # \u5426\u5219 readme-tree \u95e8\u5f3a\u5236\u6bcf\u4e2a\u6587\u4ef6\u90fd\u51fa\u73b0\u5728\u6811\u91cc\uff0creadme \u5c31\u6052\u771f\u547d\u4e2d\uff0c\u672c\u95e8\u6c38\u8fdc\u4e0d\u4f1a\u7ea2\u3002
     if "README.md" in corpus:
-        lines = corpus["README.md"].split("\n")
-        keep = []
-        inside = False
-        for ln in lines:
+        keep, inside = [], False
+        for ln in corpus["README.md"].split(chr(10)):
             if ln.strip().startswith(FENCE):
                 inside = not inside
                 continue
             if not inside:
                 keep.append(ln)
-        corpus["README.md"] = "\n".join(keep)
+        corpus["README.md"] = chr(10).join(keep)
+
+    from collections import Counter
+    base_count = Counter(os.path.basename(f) for f in md)
+    stem_of = lambda f: os.path.basename(f)[:-3] if f.endswith(".md") else os.path.basename(f)
+    stem_count = Counter(stem_of(f) for f in md)
+
+    candidates = 0
     for f in md:
         if f in ("README.md", "SKILL.md"):
             continue
-        base = os.path.basename(f)
-        # \u540c\u65f6\u63a5\u53d7\u4e24\u79cd\u5f15\u7528\u5f62\u6001\uff1a
-        #   `_xxx\u6a21\u677f.md`\uff08\u5e26\u6269\u5c55\u540d\uff09\u4e0e `[_xxx\u6a21\u677f]`\uff08\u6811\u91cc\u7684\u62ec\u53f7\u5f15\u7528\uff0c\u65e0\u6269\u5c55\u540d\uff09
-        stem = base[:-3] if base.endswith(".md") else base
-        # **\u5fc5\u987b\u5e26\u8bcd\u8fb9\u754c**\uff1a\u65e7\u7248\u7528\u88f8\u5b50\u4e32 `base in corpus[g]`\uff0c\u4e8e\u662f
-        # `_\u8bb0\u5f55\u6a21\u677f` \u4f1a\u547d\u4e2d `_\u64cd\u4f5c\u8bb0\u5f55\u6a21\u677f` \u7684\u5185\u90e8\u3001`README.md` \u4f1a\u88ab\u4efb\u4f55
-        # \u540d\u4e3a README \u7684\u6587\u6863\u300c\u5f15\u7528\u300d\u2014\u2014 \u4e0e #21\u300c\u8bed\u6599\u5305\u542b\u88ab\u4fdd\u62a4\u6587\u6863\u300d\u540c\u578b\u7684\u5047\u7eff\u3002
-        # 2026-10-25 \u5b9e\u6d4b\uff1a\u6539\u6210\u8bcd\u8fb9\u754c\u540e\u5168\u5e93\u5b64\u513f\u4ecd\u4e3a 0\uff0c\u8bf4\u660e\u5b83\u53ea\u6536\u7d27\u4e0d\u8bef\u4f24\u3002
-        pats = [re.compile(r"(?<![\w-])" + re.escape(x) + r"(?![\w-])")
-                for x in (base, stem)]
-        others = [g for g in md
-                  if g != f and any(p.search(corpus[g]) for p in pats)]
+        candidates += 1
+        base, stem = os.path.basename(f), stem_of(f)
+        pats = [re.compile(r"(?<![\w-])" + re.escape(f) + r"(?![\w-])")]
+        # 只有全库唯一的 basename / stem 才允许单独指代; 重名必须写路径
+        if base_count[base] == 1:
+            pats.append(re.compile(r"(?<![\w-])" + re.escape(base) + r"(?![\w-])"))
+        if stem_count[stem] == 1:
+            pats.append(re.compile(r"(?<![\w-])" + re.escape(stem) + r"(?![\w-])"))
+        others = [g for g in md if g != f and any(p.search(corpus[g]) for p in pats)]
         if not others:
             bad.append(f)
-    # 0 个受检对象 != 0 个坏的: 空语料只能是扫描面坏了
-    if not md:
-        bad.append("NO md files to scan (empty corpus?)")
-    rep.add(not bad, "orphan-files", "count=%d %s" % (len(bad), bad or ""))
+    # 0 个候选 != 0 个坏的
+    if candidates == 0:
+        bad.append("NO candidate files to scan (only README/SKILL in corpus?)")
+    rep.add(not bad, "orphan-files", "candidates=%d count=%d %s" % (
+        candidates, len(bad), bad or ""))
+
 
 
 def _tree_text(readme):
@@ -407,26 +416,45 @@ def check_count_claims(md, rep):
     """
     readme = read("README.md")
     problems = []
+    # 冻结的修订表行 (旧版本的历史表述) 不参与计数校验
+    FROZEN_ROW = re.compile(r"^\|\s*\*\*\d+\.\d+\.\d+\*\*\s*\|")
+
+    def _count_hits(pattern):
+        """全库(冻结行除外/围栏内除外)扫描某个构件计数, 返回 [(file,lineno,value)]."""
+        out = []
+        for f in md:
+            text = read(f)
+            # 构件计数**不跳过围栏**: README 的目录树本身就写在围栏里,
+            # 「23 份模板 / 29 条踩过的坑」正是在那儿声明的.
+            # 只跳过冻结的修订表行 (那是历史口径).
+            for i, line in enumerate(text.split(chr(10)), 1):
+                if FROZEN_ROW.match(line.strip()):
+                    continue
+                for m in re.finditer(pattern, line):
+                    out.append((f, i, m.group(1)))
+        return out
 
     # ---------- artifact counts ----------
+    # **全库**校验全部命中, 不只查 README 的第一处 ——
+    # 否则同一个数字在第二处被改错（或在别的文件里写错）也发现不了。
     # 1. 「N 份模板」
-    m = re.search(r"(\d+)\s*份模板", readme)
     n_tpl = len([f for f in md if f.startswith("templates/")])
-    if m:
-        if int(m.group(1)) != n_tpl:
-            problems.append("templates claim=%s actual=%d" % (m.group(1), n_tpl))
-    else:
-        problems.append("templates claim MISSING in README")
+    hits = _count_hits(r"(\d+)\s*份模板")
+    if not hits:
+        problems.append("templates claim MISSING")
+    for f, i, h in hits:
+        if int(h) != n_tpl:
+            problems.append("%s:%d templates claim=%s actual=%d" % (f, i, h, n_tpl))
 
-    # 2. 「N 条踩过的坑」 (README 里对 anti-patterns 的描述)
-    m = re.search(r"(\d+)\s*条踩过的坑", readme)
+    # 2. 「N 条踩过的坑」
     ap = read("references/anti-patterns.md")
     n_ap = len(re.findall(r"^### \d+\.", ap, re.M))
-    if m:
-        if int(m.group(1)) != n_ap:
-            problems.append("anti-patterns claim=%s actual=%d" % (m.group(1), n_ap))
-    else:
-        problems.append("anti-patterns claim MISSING in README")
+    ap_hits = _count_hits(r"(\d+)\s*条踩过的坑")
+    if not ap_hits:
+        problems.append("anti-patterns claim MISSING")
+    for f, i, h in ap_hits:
+        if int(h) != n_ap:
+            problems.append("%s:%d anti-patterns claim=%s actual=%d" % (f, i, h, n_ap))
 
     # 3. anti-patterns 自身的编号必须 1..N 连续(缺号/重号都是漂移)
     nums = [int(x) for x in re.findall(r"^### (\d+)\.", ap, re.M)]
@@ -437,8 +465,22 @@ def check_count_claims(md, rep):
     # 每条: (正则, 期望值, 说明). 正则必须只匹配**声明**, 不能匹配叙述.
     # 新增概念计数 -> 同轮登记到这里 (references/self-check.md 有对应勾选项).
     # 数字形态同时接受中文与阿拉伯 (「六条」与「6 条」等价).
-    CJK_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
-               "七": 7, "八": 8, "九": 9, "十": 10}
+    CJK_DIGIT = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6,
+                 "七": 7, "八": 8, "九": 9}
+
+    def _cjk_num(s):
+        """多位中文数字 -> int. 支持 十 / 十二 / 二十 / 二十三 / 一百."""
+        if s.isdigit():
+            return int(s)
+        if "百" in s:
+            a, _, b = s.partition("百")
+            return CJK_DIGIT.get(a, 1) * 100 + (_cjk_num(b) if b else 0)
+        if "十" in s:
+            a, _, b = s.partition("十")
+            return (CJK_DIGIT.get(a, 1) * 10) + (CJK_DIGIT.get(b, 0) if b else 0)
+        if len(s) == 1 and s in CJK_DIGIT:
+            return CJK_DIGIT[s]
+        return None
     NUM = r"[一二三四五六七八九十0-9]"
     concept_scanned = 0
     suppressed = []
@@ -446,30 +488,45 @@ def check_count_claims(md, rep):
     # 改它等于篡改账本 (anti-patterns #13). 用行形态识别, 不按节号硬编码.
     FROZEN_LINE_RE = re.compile(r"^\|\s*\*\*\d+\.\d+\.\d+\*\*\s*\|")
     for f in md:
-        for i, line in enumerate(read(f).split("\n"), 1):
+        text = read(f)
+        in_fence = {i for i, _ in in_code_blocks(text)}
+        for i, line in enumerate(text.split("\n"), 1):
             if line.count("count:off") and re.search(r"<!--\s*count:off\s*:.*?-->\s*$", line):
                 suppressed.append("%s:%d" % (f, i))
                 continue
             if FROZEN_LINE_RE.match(line.strip()):
                 continue
+            # 代码围栏里的计数是**示例**, 不是声明 (例如契约里的输出样例)
+            if i in in_fence:
+                continue
+            # 序数引用 / 变化叙述不是「共有 N 条」的声明
+            if CONCEPT_NARRATIVE_RE.search(line):
+                continue
             for pat, want, label in CONCEPT_SOURCES:
                 for mm in re.finditer(pat, line):
                     concept_scanned += 1
                     got = mm.group(1)
-                    val = CJK_NUM.get(got) if got in CJK_NUM else None
+                    val = _cjk_num(got)
                     if val is None:
-                        try:
-                            val = int(got)
-                        except ValueError:
-                            problems.append("%s:%d %s unparsable=%r" % (f, i, label, got))
-                            continue
+                        problems.append("%s:%d %s unparsable=%r" % (f, i, label, got))
+                        continue
                     if val != want:
                         problems.append("%s:%d %s claim=%s expected=%d" % (
                             f, i, label, got, want))
-    # 登记的每条概念都必须在语料里至少出现一次, 否则是过期登记
+    # 登记的每条概念都必须在**代码围栏外**至少出现一次, 否则是过期登记
     for pat, want, label in CONCEPT_SOURCES:
-        if not any(re.search(pat, read(f)) for f in md):
-            problems.append("registered concept never appears: %s" % label)
+        found = False
+        for f in md:
+            text = read(f)
+            in_fence = {i for i, _ in in_code_blocks(text)}
+            for i, line in enumerate(text.split("\n"), 1):
+                if i not in in_fence and re.search(pat, line):
+                    found = True
+                    break
+            if found:
+                break
+        if not found:
+            problems.append("registered concept never appears (outside fences): %s" % label)
 
     rep.add(not problems, "count-claims",
             "templates=%d anti_patterns=%d concept_scanned=%d suppressed=%d %s" % (
@@ -554,14 +611,21 @@ def check_line_number_refs(md, rep):
         if f in LINE_REF_ALLOW:
             continue
         for lineno, line in enumerate(read(f).splitlines(), 1):
+            # URL 里的 `docs/file.md:42` 是网址, 不是本仓库的行号引用
+            if "://" in line:
+                continue
             if LINE_REF_RE.search(line):
                 bad.append("%s:%d" % (f, lineno))
     rep.add(not bad, "line-number-refs", "count=%d %s" % (len(bad), bad or ""))
 
 
 def _table_cells(line):
-    """数一条表格行有几列. 行内代码里的 `|` 不算分隔符."""
+    """数一条表格行有几列.
+
+    不算分隔符的 `|`：行内代码里的（`` `a|b` ``）与被反斜杠转义的（`a \\| b`）。
+    """
     masked = re.sub(r"`[^`]*`", lambda m: m.group(0).replace("|", "\x00"), line)
+    masked = re.sub(r"\\\|", "\x00", masked)
     return len(masked.strip().strip("|").split("|"))
 
 
@@ -587,7 +651,9 @@ def check_table_shape(md, rep):
     tables = 0
     for f in md:
         text = read(f)
-        inside = set(i for i, _ in in_code_blocks(text))
+        # 模板整体包在 ```markdown 围栏里, 其表格仍必须校验;
+        # 其它文件里的围栏是「示例」, 不参与.
+        inside = set() if f.startswith("templates/") else {i for i, _ in in_code_blocks(text)}
         lines = text.split("\n")
         block = []                      # [(lineno, line)]
         def flush():
@@ -1041,9 +1107,20 @@ CONCEPT_SOURCES = [
     (r"保留全部\s*([一二三四五六七八九十0-9]+)\s*条", 6, "six-lessons-retained"),
     (r"([一二三四五六七八九十0-9]+)\s*条提问", 6, "six-questions"),
     (r"([一二三四五六七八九十0-9]+)\s*条核心约束", 4, "four-core-constraints"),
-    (r"([一二三四五六七八九十0-9]+)\s*条铁律", 6, "six-iron-rules"),
     (r"共性教训（([一二三四五六七八九十0-9]+)条", 6, "six-lessons"),
+    # 「五档」只认**带档位语境后缀**的写法（五档阶梯 / 五档速查 / 五档判据 …）。
+    # 不能用裸 `N 档` —— 「先低一档」「升一档」是合法叙述, 会天天误报。
+    (r"([一二三四五六七八九十0-9]+)档(?:阶梯|速查|判据|长度)", 5, "five-tiers"),
 ]
+
+# 概念声明**不在此列**的形态（避免把叙述当声明）：
+#   - 「第 N 条提问」是序数引用, 不是「共有 N 条」的声明;
+#   - 「又追加了三条提问」「变成五条」是在讲**变化**, 不是讲当前总数。
+# 这些行整体跳过, 不计入 concept_scanned。
+CONCEPT_NARRATIVE_RE = re.compile(
+    r"第\s*[一二三四五六七八九十0-9]+\s*条提问"
+    r"|(?:又|再|额外|追加|增加到|减少到|变成|改成)\s*[一二三四五六七八九十0-9]+\s*条"
+)
 
 
 def _has_section(body, sec):
@@ -1074,118 +1151,180 @@ def _table_header_after(lines, idx):
     return [c.replace("**", "").strip() for c in cells]
 
 
+
+# 「空表」的最小行集: 每张门禁表必须至少有一个数据行和一个不适用哨兵行,
+# 否则「删掉模板行」不会改变任何列数, schema 门看不见.
+GATE_TABLE_REQUIRED_ROWS = ("| 1 |", "| — |")
+
+
+def _table_block(lines, header_idx, in_fence):
+    """从表头行往下收集整张表 (跳过围栏内的表 —— 那是示例)."""
+    if header_idx in in_fence:
+        return None
+    rows = []
+    i = header_idx
+    while i < len(lines):
+        s = lines[i].strip()
+        if not (s.startswith("|") and s.endswith("|")):
+            break
+        rows.append(s)
+        i += 1
+    return rows
+
+
 def check_gate_table_schema(md, rep):
     """门禁表在多个载体里必须同构, 且只有两种被认可的 schema.
 
-    2026-10-25 实测: 门禁表曾有 2 个 5 列载体 + 2 个 3 列载体, 四种结构并存。
-    只改其中一处时, 其余载体静默分叉 —— 生成出来的表与权威表列的**含义不同**,
-    但两处都「有表」, 没有任何门能发现。
-
     判据 (用性质, 不认文件名):
-      1. 每个以 `| # | 门禁 |` 开头的表, 其表头必须**逐字**等于某个已登记 schema;
-      2. 权威载体与生成件**必须同为 full schema** (两者是同一张表的两个副本);
-      3. 一个门禁表都找不到 -> 红 (扫描面或识别逻辑坏了).
+      1. 每个 `| # | 门禁 |` 表头, 必须**逐字**等于某个已登记 schema;
+      2. 同一张表内所有行**列数相等** (表体不能缺列);
+      3. 必须含最小行集 (一条数据行 + 一条「不适用」哨兵);
+      4. 权威载体与生成件必须是同一个 full schema.
+    代码围栏里的表**不算** —— 那是示例, 但模板里的门禁表**在围栏内**
+    (模板整体是 ```markdown 代码块), 因此对 templates/ 下的文件不做围栏排除.
     """
     bad = []
     found = 0
-    headers = {}
     for f in md:
-        lines = read(f).split("\n")
+        text = read(f)
+        lines = text.split(chr(10))
+        # 模板文件整体包在围栏里, 但仍要校验; 其它文件排除围栏内示例.
+        in_fence = set() if f.startswith("templates/") else {i for i, _ in in_code_blocks(text)}
         for i, line in enumerate(lines):
             s = line.strip()
             if not (s.startswith("|") and "门禁" in s and "#" in s):
                 continue
             cells = _table_header_after(lines, i)
-            if not cells or cells[0] != "#" or cells[1] != "门禁":
+            if len(cells) < 2 or cells[0] != "#" or cells[1] != "门禁":
                 continue
             found += 1
-            headers[f] = cells
-            if cells not in GATE_TABLE_SCHEMAS.values():
+            schema_name = None
+            for name, want in GATE_TABLE_SCHEMAS.items():
+                if cells == want:
+                    schema_name = name
+                    break
+            if schema_name is None:
                 bad.append("%s:%d unrecognized gate-table schema %s" % (f, i + 1, cells))
+                continue
+            rows = _table_block(lines, i, in_fence)
+            if rows is None:
+                continue
+            widths = set(_table_cells(r) for r in rows)
+            if len(widths) > 1:
+                bad.append("%s:%d gate-table body has mismatched widths %s" % (f, i + 1, sorted(widths)))
+            for req in GATE_TABLE_REQUIRED_ROWS:
+                if not any(r.startswith(req) for r in rows):
+                    bad.append("%s:%d gate table lacks required row %r" % (f, i + 1, req))
+            # 权威载体与生成件必须是 full
+            if f in (GATE_TABLE_AUTHORITY, GATE_TABLE_GENERATED) and schema_name != "full":
+                bad.append("%s:%d must use full schema, got %s" % (f, i + 1, schema_name))
     if found == 0:
         bad.append("NO gate tables found (header changed?)")
-    full = GATE_TABLE_SCHEMAS["full"]
-    for f in (GATE_TABLE_AUTHORITY, GATE_TABLE_GENERATED):
-        if f not in headers:
-            bad.append("missing gate table in %s" % f)
-        elif headers[f] != full:
-            bad.append("%s gate table is not the full schema" % f)
     rep.add(not bad, "gate-table-schema",
-            "tables=%d schemas=%s bad=%d %s" % (
-                found,
-                ",".join(str(x) for x in sorted({len(v) for v in headers.values()})),
-                len(bad), bad[:5] if bad else ""))
+            "tables=%d bad=%d %s" % (found, len(bad), bad[:6] if bad else ""))
+
+
+def _validate_fixation_value(val, gate_names):
+    """返回 (kind, error). 空载体必须报错 —— 否则 `固化：contract:` 这样的
+    「写了等于没写」会通过, 覆盖数被虚高。"""
+    val = val.strip()
+    if val.startswith("gate:"):
+        ref = val[5:].strip()
+        if not ref:
+            return "gate", "empty gate name"
+        if ref not in gate_names:
+            return "gate", "unknown gate %r" % ref
+        return "gate", None
+    if val.startswith("contract:") or val.startswith("discipline:"):
+        kind = val.split(":", 1)[0]
+        rest = val.split(":", 1)[1]
+        path, _, sec = rest.partition("§")
+        path = path.strip()
+        if not path:
+            return kind, "empty carrier path"
+        fp = os.path.join(ROOT, path)
+        if not os.path.exists(fp):
+            return kind, "missing carrier %r" % path
+        if not path.endswith(".md") and sec:
+            return kind, "section on non-md %r" % path
+        if sec and not _has_section(read(path), sec):
+            return kind, "section %r not found in %s" % (sec, path)
+        return kind, None
+    if val.startswith("template:"):
+        path = val[9:].strip()
+        path, _, sec = path.partition("§")
+        path = path.strip()
+        if not path:
+            return "template", "empty template path"
+        if not os.path.exists(os.path.join(ROOT, path)):
+            return "template", "missing template %r" % path
+        if sec and not _has_section(read(path), sec):
+            return "template", "section %r not found in %s" % (sec, path)
+        return "template", None
+    for kind in ("manual", "none"):
+        pref = kind + "("
+        if val.startswith(pref) and val.endswith(")"):
+            reason = val[len(pref):-1].strip()
+            if not reason:
+                return kind, "empty %s reason" % kind
+            return kind, None
+    return None, "malformed 固化 value %r" % val
 
 
 def check_anti_pattern_fixation(md, rep):
     """每条 anti-pattern 必须声明**带类型的固化载体**, 且载体真实存在.
 
-    旧设计 (只写门名, 并要求门名 ∈ EXPECTED_GATES) 混淆了两件事:
-    EXPECTED_GATES 是 **skill 自检门**的注册表, 而教训的载体大量是
-    契约 / 模板 / 纪律 / 目标项目门禁. 强行映射会把它们全记成「手工/无」.
+    设计要点 (2026-10-25 审计后收紧):
+      - 固化行必须落在**该条目的头部窗口**里 (标题后 6 行内), 不能是游离在
+        附录/正文里的任意一行 —— 否则它会被错误归到上一条, 覆盖数虚高;
+      - 代码围栏里的 固化 行不算 (那是示例);
+      - 空载体 (`contract:` / `template:` / `manual()`) 报错.
 
-    字段取值六选一:
-        gate:<自检门名>          -> 必须在 current gate names 里
-        contract:<相对路径>§<节>  -> 文件必须存在, 节标题必须出现
-        template:<相对路径>      -> 文件必须存在
-        discipline:<相对路径>§<节>-> 文件必须存在, 节标题必须出现
-        manual(<原因>)           -> 合法, 计入手工
-        none(<原因>)             -> 合法且**鼓励**: 承认缺口比假装覆盖好
+    取值六选一:
+        gate:<自检门名> / contract:<路径>§<节> / template:<路径>§<节>
+        / discipline:<路径>§<节> / manual(<原因>) / none(<原因>)
     """
     ap = read("references/anti-patterns.md")
-    lines = ap.split("\n")
+    lines = ap.split(chr(10))
+    in_fence = {i for i, _ in in_code_blocks(ap)}
     gate_names = set(EXPECTED_GATES)
     bad = []
-    declared = {}          # kind -> count
+    declared = {}
+
+    # 按 `### N.` 切块
+    blocks = []          # (item_no, start_line, [ (lineno, line) ])
     cur = None
-    seen = set()
     for i, line in enumerate(lines, 1):
         m = re.match(r"^### (\d+)\. ", line)
         if m:
-            cur = int(m.group(1))
+            cur = [int(m.group(1)), i, []]
+            blocks.append(cur)
             continue
-        if not line.startswith("固化："):
+        if re.match(r"^## ", line):   # 上级标题结束当前条目
+            cur = None
             continue
-        if cur is None:
-            bad.append("references/anti-patterns.md:%d 固化 line before any item" % i)
+        if cur is not None:
+            cur[2].append((i, line))
+
+    seen = set()
+    for no, start, body in blocks:
+        if no in seen:
+            bad.append("references/anti-patterns.md:%d duplicate item number %d" % (start, no))
+        seen.add(no)
+        fix_lines = [(i, l) for i, l in body
+                     if l.startswith("固化：") and i not in in_fence]
+        if not fix_lines:
+            bad.append("item %d has no 固化 line" % no)
             continue
-        if cur in seen:
-            bad.append("references/anti-patterns.md:%d duplicate 固化 for item %d" % (i, cur))
-        seen.add(cur)
-        val = line[len("固化："):].strip()
-        if val.startswith("gate:"):
-            kind, ref = "gate", val[5:].strip()
-            if ref not in gate_names:
-                bad.append("%s:%d unknown gate %r" % ("references/anti-patterns.md", i, ref))
-        elif val.startswith("contract:") or val.startswith("discipline:"):
-            kind, rest = val.split(":", 1)[0], val.split(":", 1)[1]
-            path, _, sec = rest.partition("§")
-            path = path.strip()
-            fp = os.path.join(ROOT, path)
-            if not os.path.exists(fp):
-                bad.append("references/anti-patterns.md:%d missing carrier %r" % (i, path))
-            elif sec and not path.endswith(".md"):
-                bad.append("references/anti-patterns.md:%d section on non-md %r" % (i, path))
-            elif sec:
-                body = read(path)
-                # 节标题允许写成 `## 四、...` / `### 4.0 ...` / `## 牙齿验证（...）`
-                # **必须落在标题行**, 不能命中正文里的同名字符串
-                if not _has_section(body, sec):
-                    bad.append("references/anti-patterns.md:%d section %r not found in %s" % (i, sec, path))
-        elif val.startswith("template:"):
-            kind, rest = "template", val[9:].strip()
-            path, _, sec = rest.partition("§")
-            path = path.strip()
-            if not os.path.exists(os.path.join(ROOT, path)):
-                bad.append("references/anti-patterns.md:%d missing template %r" % (i, path))
-            elif sec and not _has_section(read(path), sec):
-                bad.append("references/anti-patterns.md:%d section %r not found in %s" % (i, sec, path))
-        elif val.startswith("manual(") and val.endswith(")"):
-            kind = "manual"
-        elif val.startswith("none(") and val.endswith(")"):
-            kind = "none"
-        else:
-            bad.append("references/anti-patterns.md:%d malformed 固化 value %r" % (i, val))
+        if len(fix_lines) > 1:
+            bad.append("item %d has %d 固化 lines (must be 1)" % (no, len(fix_lines)))
+        ln, line = fix_lines[0]
+        # 必须在头部窗口内 (标题后 6 行), 否则说明它属于别处
+        if ln - start > 6:
+            bad.append("item %d 固化 line at +%d is outside its header window" % (no, ln - start))
+        kind, err = _validate_fixation_value(line[len("固化："):], gate_names)
+        if err:
+            bad.append("references/anti-patterns.md:%d %s" % (ln, err))
             continue
         declared[kind] = declared.get(kind, 0) + 1
 
@@ -1196,11 +1335,14 @@ def check_anti_pattern_fixation(md, rep):
     if missing:
         bad.append("items without 固化: %s" % missing)
 
+    # 载体**声明数** != 被门**覆盖**数: 只有 gate: 是机器守住的, 其余是人工/文档承载.
     rep.add(not bad, "anti-pattern-fixation",
-            "items=%d declared=%s bad=%d %s" % (
+            "items=%d declared=%s machine_covered=%d bad=%d %s" % (
                 n_items,
                 ",".join("%s=%d" % (k, declared[k]) for k in sorted(declared)),
+                declared.get("gate", 0),
                 len(bad), bad[:5] if bad else ""))
+
 
 
 EXPECTED_GATES = [

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.9"
+  version: "1.5.10"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -226,7 +226,7 @@ prolab-main/
 ---
 
 生成 `<GOV_ROOT>/` 文档树 + 一段**宪法段**。
-**宪法段写进哪个文件由宿主的现状决定**（三选一见 `templates/_宪法段模板.md` §六）：
+**宪法段写进哪个文件由宿主的现状决定**（三选一见 `templates/_宪法段模板.md` §五）：
 有 `CLAUDE.md` 无 `AGENTS.md` → 写进 `CLAUDE.md`；只有 `AGENTS.md` → 写进它并新建
 `CLAUDE.md` 一行 `@AGENTS.md`；两者都有 → 写进 `AGENTS.md` 并在 `CLAUDE.md` 补导入。
 

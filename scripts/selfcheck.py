@@ -504,6 +504,64 @@ def check_line_number_refs(md, rep):
     rep.add(not bad, "line-number-refs", "count=%d %s" % (len(bad), bad or ""))
 
 
+def _table_cells(line):
+    """数一条表格行有几列. 行内代码里的 `|` 不算分隔符."""
+    masked = re.sub(r"`[^`]*`", lambda m: m.group(0).replace("|", "\x00"), line)
+    return len(masked.strip().strip("|").split("|"))
+
+
+def _is_separator(line):
+    """表头分隔行: 只含 | - : 与空白, 且至少有一个 - ."""
+    s = line.strip()
+    return s.startswith("|") and "-" in s and re.match(r"^\|[\s|:\-]+\|$", s) is not None
+
+
+def check_table_shape(md, rep):
+    """每张 markdown 表都必须是「表头 + 分隔行 + 同列数数据行」.
+
+    2026-10-25 实测事故: 在 README §十 的修订表插入新行时多留了一个空行,
+    于是表格从中间断开 —— 渲染出来后半截没有表头, 但**没有任何门能发现**
+    (`fence-pairing` 只看代码围栏, `md-files` 只看文件数).
+
+    判据用**性质**, 不认具体表:
+      1. 每个连续表格块的**第二行必须是分隔行** (否则就是被空行截断的半截表);
+      2. 同一块内所有行的列数必须相等 (行内代码里的 `|` 先屏蔽).
+    代码围栏内的表格不算 —— 那是示例.
+    """
+    bad = []
+    tables = 0
+    for f in md:
+        text = read(f)
+        inside = set(i for i, _ in in_code_blocks(text))
+        lines = text.split("\n")
+        block = []                      # [(lineno, line)]
+        def flush():
+            nonlocal tables
+            if not block:
+                return
+            tables += 1
+            start = block[0][0]
+            if len(block) < 2 or not _is_separator(block[1][1]):
+                bad.append("%s:%d table without header separator" % (f, start))
+            widths = set(_table_cells(l) for _, l in block)
+            if len(widths) > 1:
+                bad.append("%s:%d column count mismatch %s" % (f, start, sorted(widths)))
+        for i, line in enumerate(lines, 1):
+            if i in inside:
+                if block:
+                    flush(); block = []
+                continue
+            s = line.strip()
+            is_row = s.startswith("|") and s.endswith("|") and s.count("|") >= 3
+            if is_row:
+                block.append((i, line))
+            else:
+                flush(); block = []
+        flush()
+    rep.add(not bad, "table-shape",
+            "tables=%d bad=%d %s" % (tables, len(bad), bad[:6] if bad else ""))
+
+
 TEXT_EXT = {".md", ".py", ".txt", ".yml", ".yaml", ".json", ".toml", ".cfg", ".ini", ""}
 BOMS = (bytes([0xEF, 0xBB, 0xBF]), bytes([0xFF, 0xFE]), bytes([0xFE, 0xFF]))
 CRLF_BYTES = bytes([0x0D, 0x0A])
@@ -918,7 +976,7 @@ EXPECTED_GATES = [
     "marker-vocabulary", "stale-phrases", "line-number-refs", "bom-and-eol",
     "gov-root-literal", "tree-tier-markers", "tree-subtree-inherit",
     "tier-table-consistency", "container-readme-sections",
-    "ordinal-consistency", "template-machine-facts",
+    "ordinal-consistency", "template-machine-facts", "table-shape",
 ]
 
 
@@ -1004,6 +1062,10 @@ def main():
         check_template_machine_facts(md, rep)
     except Exception as exc:
         rep.add(False, "template-machine-facts", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_table_shape(md, rep)
+    except Exception as exc:
+        rep.add(False, "table-shape", "gate crashed: %s: %s" % (type(exc).__name__, exc))
 
     # 按**门名集合**断言，既防静默删门，也防新门漏登记 —— 数行数时删一门
     # 仍等于阈值，整次运行照样 exit 0（#26 防 5）。

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.13"
+  version: "1.5.14"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -90,7 +90,7 @@ metadata:
 用户点头就做，不点头就跳过。**目前有两项**：
 
 - `工作范式.md` §六「环境事实」一节
-- 会话交接件（`登记提示词/`，**完整档闭环的「第 8 件」独立步骤**，不在 3/5/7 步数表内）
+- 会话交接件（`登记提示词/`，**标准档起的「第 8 件」推荐项**，不在 3/5/7 步数表内）
 
 ### 1.3 生成前的**强制门**（**逐项打勾才能进 §三**）
 
@@ -134,7 +134,7 @@ metadata:
 | **宪法段长度** | 不写 | ~40 行 | ~100 行 | ~200 行 | ~200 行 + 角色/权限矩阵 |
 | **生成动作** | **什么都不生成** | 最小集（树见 `tier-selection.md` §四） | 默认集（树见 §三） | 全部 | 全部 + 角色矩阵 + **发布台账 + 审计台账** |
 | **可选容器**<br>（用户可推翻，见 §三·补） | — | `缓存/` 视需要 | `证据/` + `缓存/` | `工具/` + 前三者 | 同完整档 |
-| **`快照/`** | — | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 | 无 VCS 才要 |
+| **`快照/`** | — | 无 VCS 或治理根不在仓库内才要 | 同左 | 同左 | 同左 |
 
 **微型档的正确处置是「不装」** —— 给一份约 15 行的 `NEXT.md` 模板，说明为什么这个规模
 装治理只有坏处。**如果尽调判出微型，不要生成 `<GOV_ROOT>/`。**
@@ -273,7 +273,7 @@ prolab-main/
 |---|---|
 | 尽调清单、探测命令、要问用户的原始问题 | `references/due-diligence.md` |
 | **五档判据、项目画像、升降档信号、重型档的三个机制** | `references/tier-selection.md` |
-| 六条铁律（含零上游改动 / 只经公开面集成怎么拆两层） | `references/core/iron-rules.md` |
+| 铁律（按 ID；含零上游改动 / 只经公开面集成怎么拆两层） | `references/core/iron-rules.md` |
 | 可写范围怎么划（A–X 档位的通用形式） | `references/core/writable-scope.md` |
 | 四套 ID 序列、永不复用、前缀可配 | `references/core/id-sequences.md` |
 | 登记 / 派发 / 执行三段授权，同轮直授旁路 | `references/core/authorization-state-machine.md` |

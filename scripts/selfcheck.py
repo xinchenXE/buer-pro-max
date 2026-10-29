@@ -50,12 +50,17 @@ TREE_END = "★ = "
 
 # F4 漏洞 2: 围栏 toggle 之后, 落在块外的行不应长得像代码/输出.
 #   这是对「嵌套围栏被提前闭合」这类结构性损坏的兜底.
+#   **2026-10-29 扩**: 旧版只认 `$ `/`exit=` 等四种前缀, 于是块外残留
+#   `python scripts/selfcheck.py` / `git status --porcelain` 照样通过.
 LEAKED_LINE_RE = re.compile(
-    r"^\s*(\$\s|<输出摘录>|<命令>|exit=|files=|dead=|skipped|\{\s*verdict:)"
+    r"^\s*(\$\s|<输出摘录>|<命令>|exit=|files=|dead=|skipped|\{\s*verdict:"
+    r"|python3?\s+\S|git\s+-|git\s+[a-z]+-|npm\s+run|pnpm\s+|yarn\s+"
+    r"|node\s+\S+\.js|bash\s+\S+|sh\s+\S+\.sh|curl\s+-|wget\s+-"
+    r"|pytest\b|make\s+\w)"
 )
 
-# F3: 真行号引用. 允许清单只含刻意示例.
-#
+# 2026-10-29: 整份允许清单删除 —— 全库已无 `.md:NNN` 引用;
+# 留一个「整文件豁免」等于给行号漂移开一扇后门 (audit #5).
 # 覆盖范围只有两种: `xxx.md:NNN` 与 `（LNN）` / `（LNN–LNN）`.
 # **代码文件的 `file.ts:161` 不在扫描面内** —— 扩到这里会让行号漂移的噪音
 # 淹没真问题; 代码行号靠 doc-sync-discipline §四 的纪律兜. 这一句必须与
@@ -69,9 +74,9 @@ LINE_REF_RE = re.compile(
     r"|（\s*L\d{2,4}\s*[–\-~]\s*L?\d{2,4}\s*）"
     r"|（\s*L\d{2,4}\s*）"
 )
-LINE_REF_ALLOW = {
-    "references/tool-contracts.md",  # 刻意示例: 讲「行号会漂」时举的 file.ts:161
-}
+# URL 里的 `docs/file.md:42` 是网址, 不是本仓库的行号引用 ——
+# 只剥掉 URL 片段, **不是整行跳过** (旧版任何一个 `://` 就让整行免检).
+URL_RE = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://\S+")
 
 
 # 遍历时跳过的目录 —— .git 里的 pack 文件是二进制, 必然含 CRLF 字节,
@@ -118,18 +123,32 @@ def read_bytes(rel):
 
 
 def _fence_len(line):
-    """返回该行作为围栏的反引号长度; 不是围栏则返回 0.
+    """返回该行作为围栏的标记长度; 不是围栏则返回 0.
 
     **必须按长度配对**, 否则外层 ````（4 个）会被内层 ```（3 个）提前闭合 ——
-    这正是 _尽调结论模板.md 那个 bug 的形态, 也是「门看不见该看见的错」的典型。
+    这正是 _尽调结论模板.md 那个 bug 的形态, 也是「门看不见该看见的错」的典型.
+
+    **2026-10-29**: 同时认 `~~~` 围栏 —— 旧版只数反引号, 于是
+    `~~~markdown` 里的一切对 fence-pairing / in_code_blocks 全部隐形 (audit #21).
+    返回负数表示 `~~~` 围栏（量级仍是长度）.
     """
     s = line.strip()
+    if s.startswith("~"):
+        n = 0
+        while n < len(s) and s[n] == "~":
+            n += 1
+        return -n if n >= 3 else 0
     if not s.startswith("`"):
         return 0
     n = 0
     while n < len(s) and s[n] == "`":
         n += 1
     return n if n >= 3 else 0
+
+
+def _fence_closes(n, open_len):
+    """n 是否闭合以 open_len 开启的块: 同种围栏且长度 >= 开启长度."""
+    return bool(n) and (n > 0) == (open_len > 0) and abs(n) >= abs(open_len)
 
 
 def _walk_fences(text):
@@ -149,7 +168,8 @@ def _walk_fences(text):
             else:
                 yield i, line, False
         else:
-            if n >= open_len:
+            # 同种围栏且长度足够才闭合; `~~~` 不能闭合 ``` 块, 反之亦然
+            if _fence_closes(n, open_len):
                 open_len = 0
                 yield i, line, False
             else:
@@ -206,7 +226,7 @@ def check_fences(md, rep):
             if open_len == 0:
                 if n:
                     open_len = n
-            elif n >= open_len:
+            elif _fence_closes(n, open_len):
                 open_len = 0
         if open_len != 0:
             unbalanced.append(f)
@@ -226,7 +246,11 @@ def check_internal_dead_links(md, rep):
         if not f.startswith("templates/"):
             continue
         for lineno, line in in_code_blocks(read(f)):
-            if INTERNAL_RE.search(line) and not line.strip().startswith("<"):
+            # 行首 `<` 只豁免**整行就是指令**的写法; 行内代码或正文里的
+            # 内部路径照抓 —— 旧版任何以 `<` 开头的行整行跳过 (audit #15).
+            if line.strip().startswith("<"):
+                continue
+            if INTERNAL_RE.search(line):
                 bad.append("%s:%d" % (f, lineno))
     rep.add(not bad, "template-dead-links", "count=%d %s" % (len(bad), bad or ""))
 
@@ -377,6 +401,20 @@ def check_tree_vs_files(md, rep):
                    if n.endswith(".md") and n not in actual_names
                    and n not in ("SKILL.md", "README.md"))
 
+    # 反向: 顶层**非 .md** 文件也必须被看见 —— 旧版只遍历 .md, 于是仓库根
+    # 多出一个 NOTES.txt 时 readme-tree / md-files / orphan-files 三道门全绿
+    # (audit #23). 判据用性质: 根目录里除隐藏文件外, 每一项都要么是已知的
+    # 顶层条目, 要么出现在树里.
+    ROOT_KNOWN = {"SKILL.md", "README.md", "LICENSE",
+                  "references", "templates", "scripts"}
+    stray_root = sorted(
+        n for n in os.listdir(ROOT)
+        if not n.startswith(".") and n not in ROOT_KNOWN
+        and n not in entries
+    )
+    if stray_root:
+        missing_in_tree = missing_in_tree + ["<root>/" + s for s in stray_root]
+
     ok = not missing_top and not missing_in_tree and not ghost
     rep.add(ok, "readme-tree",
             "missing_top=%s missing_in_tree=%s ghost_in_tree=%s" % (
@@ -437,23 +475,46 @@ def check_count_claims(md, rep):
     # ---------- artifact counts ----------
     # **全库**校验全部命中, 不只查 README 的第一处 ——
     # 否则同一个数字在第二处被改错（或在别的文件里写错）也发现不了。
+    def _num(s):
+        """阿拉伯或中文数字 -> int (构件计数两种写法都要认, audit #12)."""
+        if s.isdigit():
+            return int(s)
+        d = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+             "六": 6, "七": 7, "八": 8, "九": 9}
+        if "十" in s:
+            a, _, b = s.partition("十")
+            return (d.get(a, 1) * 10) + (d.get(b, 0) if b else 0)
+        return d.get(s) if len(s) == 1 else None
+
     # 1. 「N 份模板」
     n_tpl = len([f for f in md if f.startswith("templates/")])
-    hits = _count_hits(r"(\d+)\s*份模板")
+    hits = _count_hits(r"([一二三四五六七八九十0-9]{1,3})\s*份模板")
     if not hits:
         problems.append("templates claim MISSING")
     for f, i, h in hits:
-        if int(h) != n_tpl:
+        v = _num(h)
+        if v is None:
+            problems.append("%s:%d templates claim unparsable=%r" % (f, i, h))
+        elif v == 1:
+            # 「一份模板」是叙述（= a template），不是总数声明；
+            # 构件库的总数不可能写成 1，跳过可避免把叙述当漂移.
+            continue
+        elif v != n_tpl:
             problems.append("%s:%d templates claim=%s actual=%d" % (f, i, h, n_tpl))
 
     # 2. 「N 条踩过的坑」
     ap = read("references/anti-patterns.md")
     n_ap = len(re.findall(r"^### \d+\.", ap, re.M))
-    ap_hits = _count_hits(r"(\d+)\s*条踩过的坑")
+    ap_hits = _count_hits(r"([一二三四五六七八九十0-9]{1,3})\s*条踩过的坑")
     if not ap_hits:
         problems.append("anti-patterns claim MISSING")
     for f, i, h in ap_hits:
-        if int(h) != n_ap:
+        v = _num(h)
+        if v is None:
+            problems.append("%s:%d anti-patterns claim unparsable=%r" % (f, i, h))
+        elif v == 1:
+            continue
+        elif v != n_ap:
             problems.append("%s:%d anti-patterns claim=%s actual=%d" % (f, i, h, n_ap))
 
     # 3. anti-patterns 自身的编号必须 1..N 连续(缺号/重号都是漂移)
@@ -560,22 +621,38 @@ def check_markers(md, rep):
         【可选 · 触发：X】  【可选 · 推荐】  【可选 · 推荐 —— ...】
         【参考】  【参考 · X】
     拒绝: 「必选 —— X」「必选（标准档起）」等非约定形态.
+
+    **2026-10-29 修**: 旧版只认 `【(必选|可选|参考)…】`, 于是 `【强制】`
+    这种**全新词表**根本进不了正则, 等于「不认识 = 不存在」。现在凡是
+    `【…】` 都先被看见, 未登记的词表一律报错 (audit #11).
     """
+    ANY_MARKER_RE = re.compile(r"【([^】\n]{1,40})】")
+    # 冻结的修订表行是历史记录, 引用的是当年词表 —— 改它等于篡改账本
+    # (与 count-claims 的 FROZEN_LINE_RE 同一条纪律).
+    FROZEN_ROW = re.compile(r"^\|\s*\*\*\d+\.\d+\.\d+\*\*\s*\|")
     counts = {"必选": 0, "可选": 0, "参考": 0}
     vocab = {}
     bad = []
     for f in md:
-        for kind, rest in MARKER_RE.findall(read(f)):
-            counts[kind] += 1
-            vocab[kind + rest] = vocab.get(kind + rest, 0) + 1
-            if kind == "必选":
-                ok = rest == "" or rest.startswith(" · 触发：") or rest == " · 标准档起"
-            elif kind == "可选":
-                ok = rest.startswith(" · 触发：") or rest.startswith(" · 推荐")
-            else:
-                ok = rest == "" or rest.startswith(" · ")
-            if not ok:
-                bad.append("%s: 【%s%s】" % (f, kind, rest))
+        for line in read(f).split("\n"):
+            if FROZEN_ROW.match(line.strip()):
+                continue
+            for raw in ANY_MARKER_RE.findall(line):
+                m = re.match(r"(必选|可选|参考)(.*)$", raw, re.S)
+                if not m:
+                    bad.append("%s: unknown marker vocab 【%s】" % (f, raw))
+                    continue
+                kind, rest = m.group(1), m.group(2)
+                counts[kind] += 1
+                vocab[kind + rest] = vocab.get(kind + rest, 0) + 1
+                if kind == "必选":
+                    ok = rest == "" or rest.startswith(" · 触发：") or rest == " · 标准档起"
+                elif kind == "可选":
+                    ok = rest.startswith(" · 触发：") or rest.startswith(" · 推荐")
+                else:
+                    ok = rest == "" or rest.startswith(" · ")
+                if not ok:
+                    bad.append("%s: 【%s%s】" % (f, kind, rest))
     if sum(counts.values()) == 0:
         bad.append("NO markers found (marker regex broken or docs unmarked?)")
     detail = "must=%d optional=%d ref=%d vocab_forms=%d invalid=%d %s" % (
@@ -608,13 +685,11 @@ def check_line_number_refs(md, rep):
     """
     bad = []
     for f in md:
-        if f in LINE_REF_ALLOW:
-            continue
         for lineno, line in enumerate(read(f).splitlines(), 1):
-            # URL 里的 `docs/file.md:42` 是网址, 不是本仓库的行号引用
-            if "://" in line:
-                continue
-            if LINE_REF_RE.search(line):
+            # URL 里的 `docs/file.md:42` 是网址 —— 只剥 URL 片段再判,
+            # 不因整行含 URL 就放弃该行 (旧版 `if "://" in line: continue`
+            # 让同一行的真行号引用一并隐形).
+            if LINE_REF_RE.search(URL_RE.sub(" ", line)):
                 bad.append("%s:%d" % (f, lineno))
     rep.add(not bad, "line-number-refs", "count=%d %s" % (len(bad), bad or ""))
 
@@ -723,7 +798,11 @@ def check_gov_root_literal(md, rep):
         if f in ALLOW:
             continue
         for i, line in enumerate(read(f).split("\n"), 1):
-            if LITERAL in line:
+            # 路径分隔符与重复斜杠不得让人绕过字面量检查 ——
+            # `docs\governance` 与 `docs//governance` 是同一个死路径 (audit #10).
+            probe = line.replace(chr(92), "/")
+            probe = re.sub(r"/{2,}", "/", probe)
+            if LITERAL in probe:
                 bad.append("%s:%d" % (f, i))
     rep.add(not bad, "gov-root-literal", "count=%d %s" % (len(bad), bad[:8] if bad else ""))
 
@@ -886,6 +965,33 @@ def check_tier_table_consistency(md, rep):
                 if needle in probe and "—" not in cell:
                     expected[cname] = mark_of[tiers[idx]]
                     break
+    # 0 个受检容器 != 0 个坏的 —— 权威行被清空/改名时, 旧版 checked=0 仍 PASS
+    # (audit #7). 「计划容器」行被整体换掉时这里必须红.
+    if not expected:
+        bad.append("tier-selection.md: 「计划容器」行解析出 0 个容器（被清空或改名？）")
+
+    # 计划容器之外**同样必须受监督**的容器。删掉 `执行偏差/ {完整起}` 这种
+    # 标记会让整棵树退化成「标准档也生成」, 而旧门只比 5 个计划容器 (audit #9).
+    # 值 = (权威表里必须出现的词, gen-tree 里必须带的确切标记).
+    # 用 chr(0xB7) 显式拼中间点 —— 直接敲 `·` 可能落到另一个同形码位
+    # (U+2022 / U+30FB), 于是与 gen-tree 的字面永远不相等.
+    DOT = chr(0xB7)
+    SUPERVISED = {
+        "问题记录/": ("问题记录", "标准起"),
+        "代码修改记录/": ("代码修改记录", "标准起"),
+        "归档文档/": ("归档文档", "标准起"),
+        "证据/": ("证据", "标准起" + DOT + "触发"),
+        "执行偏差/": ("执行偏差", "完整起"),
+        "操作记录/": ("操作记录", "完整起"),
+        "工具/": ("工具", "完整起" + DOT + "触发"),
+        "休眠计划/": ("休眠计划", "标准起"),
+        "丢弃计划/": ("丢弃计划", "完整起"),
+        "问题归档/": ("问题归档", "标准起"),
+        "偏差归档/": ("偏差归档", "完整起"),
+    }
+    # 受监督值的来源: 每个值都必须在 gen-tree 的**图例**里登记过 ——
+    # 防止本门自己编造一个不存在的标记词. (按容器名做「权威表必须提到」
+    # 的断言会误伤: 权威表用「问题记录 / 修改记录」这类合并写法.)
 
     # --- 解析 gen-tree 的树行 ---
     rows = []
@@ -918,12 +1024,27 @@ def check_tier_table_consistency(md, rep):
             bad.append("gen-tree.md:%d %s mark={%s} but tier table says {%s}" % (
                 r[0], needle, r[2], want))
 
-    # --- 两条特殊硬约束 ---
+    # --- 受监督容器: 标记必须逐字等于登记值, 行必须存在 ---
+    for name, (_, want) in SUPERVISED.items():
+        # 用带 `/` 的容器名做 needle —— 裸「证据」会先命中
+        # 「代码修改记录/…← 逐文件证据」那一行, 比对到错误的行.
+        r = find_row(name)
+        if r is None:
+            bad.append("gen-tree.md: 缺少被监督的容器行 %s" % name)
+        elif r[2] != want:
+            bad.append("gen-tree.md:%d %s mark={%s} but supervised value is {%s}" % (
+                r[0], name, r[2], want))
+
+    # --- 两条特殊硬约束: **行缺失也要报错**, 不能 `if r:` 静默通过 (audit #8) ---
     r = find_row("AGENTS.md")
-    if r and r[2] == "标准起":
+    if r is None:
+        bad.append("gen-tree.md: AGENTS.md 行缺失（宪法段落点没了）")
+    elif r[2] == "标准起":
         bad.append("gen-tree.md:%d AGENTS.md must NOT be standard-tier-only" % r[0])
     r = find_row("缓存/")
-    if r and r[2] and r[2].startswith("标准"):
+    if r is None:
+        bad.append("gen-tree.md: 缓存/ 行缺失")
+    elif r[2] and r[2].startswith("标准"):
         bad.append("gen-tree.md:%d cache must not be standard-tier-only" % r[0])
 
     # --- 图例：空集必须报错，不能静默跳过 ---
@@ -959,15 +1080,34 @@ def check_container_readme_sections(md, rep):
     """
     bad = []
     scanned = 0
+    # 容器 README 模板的**权威名单**: 凡是 gen-tree 里挂了 [_容器README模板] 的容器,
+    # 都必然有一份容器 README 模板. 用文件名子串识别会被「改名」绕过 ——
+    # 把 _证据README模板 改成 _证据模板 后旧门连它都不再看 (audit #18).
+    REQUIRED_CONTAINER_READMES = (
+        "_治理根README模板.md",
+        "_项目清单README模板.md",
+        "_活跃计划README模板.md",
+        "_证据README模板.md",
+        "_缓存README模板.md",
+        "_工具README模板.md",
+        "_快照README模板.md",
+    )
     for f in md:
         base = f.split("/")[-1]
         if not f.startswith("templates/"):
             continue
-        if "README" not in base:
+        if "README" not in base and base not in REQUIRED_CONTAINER_READMES:
             continue
         scanned += 1
-        if "不在这里放什么" not in read(f):
+        # 判据是**标题行**, 不是任意正文 —— 旧版子串命中会让「把标题改名、
+        # 正文里还留着这句话」通过 (audit #17).
+        body = read(f)
+        if not any(re.match(r"^#{1,4}\s.*不在这里放什么", ln)
+                   for ln in body.split("\n")):
             bad.append(f)
+    for req in REQUIRED_CONTAINER_READMES:
+        if "templates/" + req not in md:
+            bad.append("templates/%s 缺失（容器 README 名单被删？）" % req)
     if scanned == 0:
         bad.append("NO container README templates matched (renamed?)")
     rep.add(not bad, "container-readme-sections",
@@ -1043,26 +1183,55 @@ def check_ordinal_consistency(md, rep):
     「某模板 ← 完成宣告第 3、4 步的落点」这种整行只说步号的写法。
     这类行必须人工核对（`self-check.md` 里有对应的人工项）。
     """
-    bad, unjudged = [], 0
+    bad, unjudged, examined = [], 0, 0
+    examined_authority = 0
     for f in md:
-        if f in ORDINAL_SKIP:
-            continue
         lines = read(f).split("\n")
+        skipped = f in ORDINAL_SKIP
         for idx, line in enumerate(lines):
             nums = _ordinal_claims(line)
             if not nums:
                 continue
+            if skipped:
+                # 权威文件里的步号**也要被看见**, 只是不做主题词反查 ——
+                # 旧版整份豁免, 于是往权威文件里写「第 9 步」照样绿 (audit #20).
+                examined_authority += 1
+                for n in nums:
+                    if n not in ORDINAL_STEPS:
+                        bad.append("%s:%d 第%d步不存在（权威表只有 1–7）" % (f, idx + 1, n))
+                continue
+            examined += 1
             window = "\n".join(lines[max(0, idx - 3): idx + 1])
             topics = {n for n, ws in ORDINAL_STEPS.items() if any(w in window for w in ws)}
             if not topics:
                 unjudged += 1
                 continue
             for n in nums:
-                if n in ORDINAL_STEPS and n not in topics:
+                if n not in ORDINAL_STEPS:
+                    # 超出 1–7 的步号必须报错, 不能静默忽略 (audit #2)
+                    bad.append("%s:%d 第%d步不存在（权威表只有 1–7）" % (f, idx + 1, n))
+                elif n not in topics:
                     bad.append("%s:%d 第%d步(上下文说的是第%s步)" % (
                         f, idx + 1, n, "/".join(map(str, sorted(topics)))))
+            # 行内括注是最强的信号: 「第 4 步（归档）」把错配写在括号里.
+            # 窗口法会因为窗口内同时出现两个主题词而放行 (audit #1).
+            for m in re.finditer(r"第\s*(\d+)\s*步\s*（([^）]*)）", line):
+                n = int(m.group(1))
+                note = m.group(2)
+                if n in ORDINAL_STEPS and not any(
+                        w in note for w in ORDINAL_STEPS[n]):
+                    bad.append("%s:%d 第%d步括注 %r 不含该步主题词" % (
+                        f, idx + 1, n, note))
+    # 0 个受检对象 != 0 个坏的 —— 关键词被改名时旧版零语料仍 PASS (audit #3).
+    # 直接查两个关键词的全库存在性: 一个都没有 = 语料没了, 不是「没有声明」.
+    kw_present = sum(1 for f in md if ORDINAL_KW_RE.search(read(f)))
+    if kw_present == 0:
+        bad.append("NO ordinal keywords in corpus (完成宣告/闭环仪式 renamed?)")
+    elif examined + examined_authority == 0:
+        bad.append("NO ordinal claims found (keywords present but no 第N步 claims?)")
     rep.add(not bad, "ordinal-consistency",
-            "bad=%d unjudged=%d %s" % (len(bad), unjudged, bad[:8] if bad else ""))
+            "examined=%d bad=%d unjudged=%d %s" % (
+                examined + examined_authority, len(bad), unjudged, bad[:8] if bad else ""))
 
 
 def check_template_machine_facts(md, rep):
@@ -1083,7 +1252,9 @@ def check_template_machine_facts(md, rep):
     for f in md:
         if not f.startswith("templates/"):
             continue
-        for lineno, line in in_code_blocks(read(f)):
+        # 旧版只看**围栏内**的行 —— `~~~markdown` 块与围栏外的生成块都隐形.
+        # 模板文件的正文本身就是生成件, 两份都扫 (audit #16).
+        for lineno, line in enumerate(read(f).split("\n"), 1):
             scanned += 1
             if pat.search(line):
                 bad.append("%s:%d" % (f, lineno))
@@ -1185,6 +1356,9 @@ def check_gate_table_schema(md, rep):
     """
     bad = []
     found = 0
+    # 受监督载体必须**各自至少有一张**门禁表 —— 否则把整张表删掉时,
+    # 其它文件里的表让 found>0, 本门照样绿 (audit #6).
+    per_file = {}
     for f in md:
         text = read(f)
         lines = text.split(chr(10))
@@ -1198,6 +1372,7 @@ def check_gate_table_schema(md, rep):
             if len(cells) < 2 or cells[0] != "#" or cells[1] != "门禁":
                 continue
             found += 1
+            per_file[f] = per_file.get(f, 0) + 1
             schema_name = None
             for name, want in GATE_TABLE_SCHEMAS.items():
                 if cells == want:
@@ -1220,6 +1395,9 @@ def check_gate_table_schema(md, rep):
                 bad.append("%s:%d must use full schema, got %s" % (f, i + 1, schema_name))
     if found == 0:
         bad.append("NO gate tables found (header changed?)")
+    for carrier in (GATE_TABLE_AUTHORITY, GATE_TABLE_GENERATED):
+        if per_file.get(carrier, 0) == 0:
+            bad.append("%s: 门禁表整表缺失（载体被删或被改名）" % carrier)
     rep.add(not bad, "gate-table-schema",
             "tables=%d bad=%d %s" % (found, len(bad), bad[:6] if bad else ""))
 
@@ -1247,17 +1425,23 @@ def _validate_fixation_value(val, gate_names):
             return kind, "missing carrier %r" % path
         if not path.endswith(".md") and sec:
             return kind, "section on non-md %r" % path
+        if "§" in rest and not sec.strip():
+            # `path.md§` —— 挂了节号符号却没写节名, 等于跳过节存在性检查 (audit #19).
+            return kind, "empty section after § in %r" % path
         if sec and not _has_section(read(path), sec):
             return kind, "section %r not found in %s" % (sec, path)
         return kind, None
     if val.startswith("template:"):
         path = val[9:].strip()
+        raw = path
         path, _, sec = path.partition("§")
         path = path.strip()
         if not path:
             return "template", "empty template path"
         if not os.path.exists(os.path.join(ROOT, path)):
             return "template", "missing template %r" % path
+        if "§" in raw and not sec.strip():
+            return "template", "empty section after § in %r" % path
         if sec and not _has_section(read(path), sec):
             return "template", "section %r not found in %s" % (sec, path)
         return "template", None

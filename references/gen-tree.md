@@ -51,7 +51,7 @@
 以下两个**可选容器**也住在 `<GOV_ROOT>/` 下，生成与否见 `SKILL.md` §三·补「可选容器」：
 
     ├── 工具/  {完整起·触发} ← 门禁脚本（契约见 references/tool-contracts.md）[_工具README模板]
-    └── 快照/  {无VCS} ← **仅当无 VCS**；有 git 则不要它      [_快照README模板]
+    └── 快照/  {无VCS} ← **仅当「无 VCS」或「治理根不在仓库内」**；git 能覆盖治理根时不要它      [_快照README模板]
 ```
 
 **树里的档位标记怎么读**（**权威口径；源头是 `tier-selection.md` §一**）：

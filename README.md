@@ -65,42 +65,81 @@
 **没有构建步骤、没有运行时依赖、没有宿主 SDK**。装法只有一个动作 ——
 **把整个目录放到宿主约定的 skills / 规则目录下**。
 
-### 1. 常见宿主的放置位置
+### 1. 选装在哪一级
+
+| 级别 | 路径 | 谁能用 | 什么时候选 |
+|---|---|---|---|
+| **用户级** | `~/.claude/skills/buer-pro-max/` | 你这台机器上的**所有**项目 | 默认选它 —— 大多数人是「在几个项目之间都用同一套治理」 |
+| **项目级** | `<项目根>/.claude/skills/buer-pro-max/` | 只有那个项目 | 想让它跟项目一起提交、或不同项目需要不同版本时 |
+
+> **不要两边都装同一份**。宿主会看到两个同名 skill，加载哪个取决于它的查找顺序 ——
+> 你会在一个项目里按旧版规则行事，且**没有任何报错**。
+
+### 2. 安装（推荐 `git clone`）
+
+**用 clone，不要用下载 zip / 拷目录。** 唯一区别在升级：clone 装的一年后是一条
+`git pull`，拷贝装的每次都要「重新下载 + 整目录替换」。命令见 **§一·补 拉取更新**。
+
+```sh
+# 用户级（macOS / Linux / git-bash）
+git clone https://github.com/xinchenXE/buer-pro-max.git ~/.claude/skills/buer-pro-max
+
+# 项目级
+git clone https://github.com/xinchenXE/buer-pro-max.git <项目根>/.claude/skills/buer-pro-max
+```
+
+```powershell
+# Windows PowerShell —— 用户级
+git clone https://github.com/xinchenXE/buer-pro-max.git "$env:USERPROFILE\.claude\skills\buer-pro-max"
+
+# Windows PowerShell —— 项目级
+git clone https://github.com/xinchenXE/buer-pro-max.git "<项目根>\.claude\skills\buer-pro-max"
+```
+
+> **国内网络**：把 URL 换成镜像 `https://cnb.cool/xinchenXE/buer-pro-max.git`，
+> 内容与 GitHub 完全一致（两个远端由维护者同步推送）。
+
+**拷贝安装（仅在不能 clone 时用）**：把整个目录放到上表的位置即可 ——
+但请记住它会像 §一·补 第 4 条说的那样，**升级时只能整目录替换**。
+
+```sh
+cp -r buer-pro-max ~/.claude/skills/
+```
+
+### 3. 其他宿主
 
 | 宿主 | 放哪 | 备注 |
 |---|---|---|
-| **Claude Code** | `~/.claude/skills/`（用户级）或 `<项目根>/.claude/skills/`（项目级） | 本 skill 按此格式编写，开箱可用 |
-| **Codex** | `$CODEX_HOME/skills/`（默认 `~/.codex/skills/`） | |
+| **Codex** | `$CODEX_HOME/skills/`（默认 `~/.codex/skills/`） | 同上：clone 进去 |
 | **Cursor** | 项目内 `.cursor/rules/`，或把 `SKILL.md` 作为规则文档喂给它 | Cursor 不读 skill 目录，读规则 |
 | **Gemini CLI / 其他** | 该工具自己文档写的 skill / 规则位置 | **不要猜路径** —— 查它的文档 |
 | **任何没有 skill 机制的 agent** | 直接把 `SKILL.md` 当规范贴进上下文，`references/` 放在可达位置 | 退化为「一份很长的规则文档」，仍然有效 |
 
+### 4. 装完先确认再触发
+
 ```sh
-# 通用做法：拷到宿主约定的 skills 目录
-cp -r buer-pro-max <宿主的 skills 目录>/
-
-# Claude Code 用户级（示例）
-cp -r buer-pro-max ~/.claude/skills/
+cd ~/.claude/skills/buer-pro-max
+rg '^\s*version:' SKILL.md          # 应看到 metadata.version
+python scripts/selfcheck.py         # 可选（要有 Python 3）：必须 failed=0
 ```
 
-> **更好的装法是 `git clone` 而不是拷贝** —— 这样以后升级就是一条 `git pull`，
-> 而不是「重新下载 + 整目录替换」。命令与升级步骤见 **§一·补 拉取更新**。
+- **目录名建议就叫 `buer-pro-max`** —— 与 frontmatter 里的 `name` 一致，避免两个名字在脑子里并存。
+- `selfcheck.py` 只在**维护**这个 skill 时才需要；**使用**它零依赖。
+  但装完跑一次能立刻排除「clone 下来的是个发布前提交」这种可能。
 
-```powershell
-# Windows
-Copy-Item -Recurse -Force buer-pro-max "$env:USERPROFILE\.claude\skills\buer-pro-max"
-```
+### 5. 触发
 
-### 2. 触发
-
-装好后在新会话里说 **「给这个项目建立治理」**、**「建立治理框架」**、
+装好后在**新会话**里说 **「给这个项目建立治理」**、**「建立治理框架」**、
 **「bootstrap governance」**、**「set up a dev paradigm」** 等即可触发
 （完整触发词见 `SKILL.md` 的 `description`）。
 
+> **新装的 skill 可能要开新会话才生效** —— 宿主在会话启动时加载技能描述，
+> 已在跑的会话不会中途发现它。
+>
 > **如果你的宿主不支持「自动加载技能描述」**：直接把 `SKILL.md` 开头那段
 > `description` 贴给 agent，或说「读 `SKILL.md` 并按它执行」。
 
-### 3. 依赖
+### 6. 依赖
 
 - **读取 / 使用本 skill：零依赖。** 它是纯 Markdown。
 - **维护它自己**（改完跑自检）：需要 **Python 3**，只用标准库，无第三方包。

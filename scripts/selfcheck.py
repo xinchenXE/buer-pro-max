@@ -1343,6 +1343,87 @@ def _table_block(lines, header_idx, in_fence):
     return rows
 
 
+def check_container_registry(md, rep):
+    """每个「容器」必须在三处登记: gen-tree 有行且带档位标记 / naming 有中英对照 /
+    容器一览表有行. 缺任何一处 = 这个容器在某个命名模式下或某份索引里不存在.
+
+    **2026-10-29 新增**: 加入 `标记删除/` 时实测发现两处盲区 ——
+      · 删掉 gen-tree 上它的 `{可选·触发}` 标记, 三道档位门全绿
+        (`tree-tier-markers` 只验标记**合法**, 不验**必须存在**;
+         `tier-table-consistency` 的 SUPERVISED 是硬编码名单, 新容器不在里面);
+      · 把 naming 里它的对照行改坏, 也没有门会发现.
+    本门把「受监督容器清单」变成一份**声明**, 并逐项核对三处登记.
+    """
+    # 受监督容器 —— 这里的每一行都是**声明**: 它必须在 gen-tree 与 naming 出现.
+    # 新增容器时同轮加到这里 (references/self-check.md 有对应勾选项).
+    REQUIRED = {
+        "项目清单/": "catalog/",
+        "计划队列/": "queue/",
+        "活跃计划/": "active/",
+        "归档计划/": "archive/",
+        "休眠计划/": "dormant/",
+        "丢弃计划/": "dropped/",
+        "归档文档/": "archive-docs/",
+        "问题记录/": "issues/",
+        "问题归档/": "issues-archive/",
+        "执行偏差/": "deviations/",
+        "偏差归档/": "deviations-archive/",
+        "代码修改记录/": "change-log/",
+        "操作记录/": "operations/",
+        "登记提示词/": "handoff/",
+        "证据/": "evidence/",
+        "缓存/": "cache/",
+        "工具/": "tools/",
+        "快照/": "snapshots/",
+        "标记删除/": "trash/",
+    }
+    # 档位标记**必须存在**的只有可选 / 条件容器 —— 计划类容器在轻量档起生成,
+    # 按 tier-selection 的口径它们**裸行是对的**（无标记 = 轻量起）。
+    MARK_REQUIRED = {"证据/", "缓存/", "工具/", "快照/", "标记删除/"}
+    gt = read("references/gen-tree.md")
+    nm = read("references/naming.md")
+    bad = []
+
+    in_tree = False
+    tree_rows = {}
+    for line in gt.split("\n"):
+        if line.strip().startswith(FENCE):
+            in_tree = not in_tree
+            continue
+        if not in_tree or "──" not in line:
+            continue
+        for name in REQUIRED:
+            if name in line and name not in tree_rows:
+                mk = TIER_MARK_RE.search(line)
+                tree_rows[name] = mk.group(1) if mk else None
+    for name in REQUIRED:
+        if name not in tree_rows:
+            bad.append("gen-tree.md: 缺少容器行 %s" % name)
+        elif name in MARK_REQUIRED and tree_rows[name] is None:
+            bad.append("gen-tree.md: %s 是可选项却没有档位标记（裸行）" % name)
+
+    # naming: 中英对照行必须同时出现两个名字
+    for name, en in REQUIRED.items():
+        if ("`%s`" % name) not in nm or ("`%s`" % en) not in nm:
+            bad.append("naming.md: 缺少对照 %s <-> %s" % (name, en))
+
+    # 容器一览表: 治理根 README 与项目清单 README 各至少要提到它一次。
+    # 归档子容器在表里写成 `问题记录/问题归档/` 这种嵌套路径, 所以用**裸名字**
+    # 匹配, 不要求反引号紧贴; 项目清单在它自己的表里是「本目录」, 豁免自指。
+    for tpl in ("templates/_治理根README模板.md", "templates/_项目清单README模板.md"):
+        body = read(tpl)
+        for name in REQUIRED:
+            if tpl.endswith("_项目清单README模板.md") and name == "项目清单/":
+                continue
+            if name not in body:
+                bad.append("%s: 容器一览缺少 %s" % (tpl, name))
+
+    if not REQUIRED:
+        bad.append("NO supervised containers declared (registry emptied?)")
+    rep.add(not bad, "container-registry",
+            "declared=%d bad=%d %s" % (len(REQUIRED), len(bad), bad[:8] if bad else ""))
+
+
 def check_gate_table_schema(md, rep):
     """门禁表在多个载体里必须同构, 且只有两种被认可的 schema.
 
@@ -1536,7 +1617,7 @@ EXPECTED_GATES = [
     "gov-root-literal", "tree-tier-markers", "tree-subtree-inherit",
     "tier-table-consistency", "container-readme-sections",
     "ordinal-consistency", "template-machine-facts", "table-shape",
-    "anti-pattern-fixation", "gate-table-schema",
+    "anti-pattern-fixation", "container-registry", "gate-table-schema",
 ]
 
 
@@ -1630,6 +1711,10 @@ def main():
         check_anti_pattern_fixation(md, rep)
     except Exception as exc:
         rep.add(False, "anti-pattern-fixation", "gate crashed: %s: %s" % (type(exc).__name__, exc))
+    try:
+        check_container_registry(md, rep)
+    except Exception as exc:
+        rep.add(False, "container-registry", "gate crashed: %s: %s" % (type(exc).__name__, exc))
     try:
         check_gate_table_schema(md, rep)
     except Exception as exc:

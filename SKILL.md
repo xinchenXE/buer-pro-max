@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.6.0"
+  version: "1.7.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -105,7 +105,8 @@ metadata:
 - [ ] **`<GOV_ROOT>` 已定**（§3.0；用户指定或采用默认值，且已记录）
 - [ ] **命名方案已定**（中文 / 英文，见 `references/naming.md`）
 - [ ] **档位已判**，且「为什么不选更高档」有答案
-- [ ] **可选容器逐个按触发信号判过**（证据 / 缓存 / 工具 / 快照），结论已告诉用户
+- [ ] **可选容器逐个判过**（证据 / 缓存 / 工具 / 快照按触发信号；**标记删除按用户选择**），
+      结论已告诉用户 —— **`标记删除/` 必须把「优点 / 缺点 / 建议」三段说全**
 - [ ] **上述结论已写进尽调结论**（`<GOV_ROOT>/项目清单/尽调结论.md`；
       **微型档例外**：不建 `<GOV_ROOT>/`，结论写进 `NEXT.md` 的「已决定」节）
 
@@ -135,6 +136,7 @@ metadata:
 | **生成动作** | **什么都不生成** | 最小集（树见 `tier-selection.md` §四） | 默认集（树见 §三） | 全部 | 全部 + 角色矩阵 + **发布台账 + 审计台账** |
 | **可选容器**<br>（用户可推翻，见 §三·补） | — | `缓存/` 视需要 | `证据/` + `缓存/` | `工具/` + 前三者 | 同完整档 |
 | **`快照/`** | — | 无 VCS 或治理根不在仓库内才要 | 同左 | 同左 | 同左 |
+| **`标记删除/`** | — | 由用户选（推荐与 `快照/` 同源） | 同左 | 同左 | 同左 |
 
 **微型档的正确处置是「不装」** —— 给一份约 15 行的 `NEXT.md` 模板，说明为什么这个规模
 装治理只有坏处。**如果尽调判出微型，不要生成 `<GOV_ROOT>/`。**
@@ -246,8 +248,12 @@ prolab-main/
 
 ## 三·补、可选容器：由用户选，默认值挂档位
 
-`证据/` `缓存/` `工具/` `快照/` 这四个容器**不是每档都生成**，
+`证据/` `缓存/` `工具/` `快照/` `标记删除/` 这五个容器**不是每档都生成**，
 各自解决一类问题；**问题不存在的项目不该有它们**。
+
+> **`标记删除/` 是唯一「由用户选」的可选容器**：它没有自动触发信号。
+> 生成前必须把「启用 / 不启用」的**优点、缺点、建议**一次说全（推荐与 `快照/` 同源启用），
+> 让用户能推翻。问法与同步清单见 `references/optional-containers.md`。
 
 **判定顺序、触发信号表、三条纪律、以及在 `<GOV_ROOT>/README.md` 里怎么写，
 见 `references/optional-containers.md`。**

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.7.0"
+  version: "1.8.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -128,7 +128,7 @@ metadata:
 | **适用** | 单文件脚本 / 周末实验 | 单人小工具或库 | 单人/小团队主力项目 | 跨会话长周期产品 | 多仓库 / 多角色 / 有发布与合规 |
 | **判据** | 1–2 个源文件，不打算回来维护 | < 5k 行；无外部上游；改动面 1 个目录 | 5k–50k 行；2–3 个目录；跨会话 | > 50k 行，**或**已有 ≥ 20 轮**治理轮次**（有逐轮记录的轮，不是提交数） | 多个维护者；发布列车；审计要求 |
 | **计划容器** | 无 | 活跃 / 归档 | + 休眠 / 归档文档 | 全部（含丢弃） | 全部（子目录分流见 `tier-selection.md` §五·补） |
-| **ID 序列** | 无 | 队列 + 轮次 | + 问题 | + 偏差（四序列） | 四序列 + 命名空间前缀 |
+| **ID 序列** | 无 | 队列 + 轮次 | + 问题 | + 偏差 + 操作（五序列） | 五序列 + 命名空间前缀 |
 | **台账** | 无 | 队列总表 | + 问题记录 / 修改记录 | + 偏差总账 / 操作记录 | + 审计台账 / 发布台账 |
 | **闭环仪式** | 无（提交即闭环） | 3 步 | 5 步 | 7 步 | 7 步 + 发布门 + 双人签署 |
 | **铁律**（按 ID，见 `iron-rules.md` 顶部） | 无 | ③ | ③④⑤⑥ | ③④⑤⑥ + ①②（按触发） | 同完整 + 契约化（角色矩阵） |
@@ -289,7 +289,7 @@ prolab-main/
 | **五档判据、项目画像、升降档信号、重型档的三个机制** | `references/tier-selection.md` |
 | 铁律（按 ID；含零上游改动 / 只经公开面集成怎么拆两层） | `references/core/iron-rules.md` |
 | 可写范围怎么划（A–X 档位的通用形式） | `references/core/writable-scope.md` |
-| 四套 ID 序列、永不复用、前缀可配 | `references/core/id-sequences.md` |
+| 五套 ID 序列、永不复用、前缀可配 | `references/core/id-sequences.md` |
 | 登记 / 派发 / 执行三段授权，同轮直授旁路 | `references/core/authorization-state-machine.md` |
 | 五个计划容器的分类规则与生命周期 | `references/core/plan-containers.md` |
 | 完成宣告与闭环仪式（三/五/七步） | `references/core/completion-ritual.md` |

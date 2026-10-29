@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.16"
+  version: "1.5.17"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -265,6 +265,9 @@ prolab-main/
   **不按本 skill 的模板去「修正」目标项目** —— 它的规则载体是权威。
 - **演进**：三种动作（加容器 / 升档 / 降档），**都不改历史**；
   降档不删文件，升档不跳步，演进本身必须留痕。
+- **版本对齐**：skill 更新了，项目里**已生成的治理树不会自动跟着变**
+  （`git pull` 只动 skill）。对齐 = **差异审计 → 逐条裁决 → 只改规则载体 → 留痕**，
+  `audit-and-evolve.md` §三。**不要用新版模板覆盖生成树。**
 
 
 ## 五、规则正文去哪找

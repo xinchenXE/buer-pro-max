@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.5.17"
+  version: "1.6.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -268,6 +268,9 @@ prolab-main/
 - **版本对齐**：skill 更新了，项目里**已生成的治理树不会自动跟着变**
   （`git pull` 只动 skill）。对齐 = **差异审计 → 逐条裁决 → 只改规则载体 → 留痕**，
   `audit-and-evolve.md` §三。**不要用新版模板覆盖生成树。**
+- **更新范围默认只在途**：已闭环的计划 / 问题 / 偏差、已归档与已冻结的文档
+  **不进入更新、也不做修改**，并须在报告里逐条写明原因码（已闭环 / 已冻结 / 历史事实）。
+  要动这些**必须有用户当轮原话**，且按 `audit-and-evolve.md` §3.3 留痕。
 
 
 ## 五、规则正文去哪找

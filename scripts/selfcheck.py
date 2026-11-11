@@ -151,6 +151,12 @@ def _fence_closes(n, open_len):
     return bool(n) and (n > 0) == (open_len > 0) and abs(n) >= abs(open_len)
 
 
+# CommonMark 的围栏判定：**闭合行必须只有反引号**（无 info string）。
+# 带 info 的反引号行永远是新块的开围栏 —— 这正是内层示例提前截断外层的机制。
+_CM_OPEN = re.compile(r"^\s*(`{3,})(.*)$")
+_CM_CLOSE = re.compile(r"^\s*(`{3,})\s*$")
+
+
 def _walk_fences(text):
     """Yield (lineno, line, content_inside) —— 按反引号**长度**配对.
 
@@ -214,9 +220,28 @@ class Report(object):
 # ---------------------------------------------------------------- gates
 
 def check_fences(md, rep):
-    """围栏配对(按长度) + 块外不得残留代码/输出形态的行（F4 漏洞 2）."""
+    """围栏配对(按长度) + 块外不得残留代码/输出形态的行（F4 漏洞 2）
+
+    ---
+    **2026-11-11 新增 `nested_and_unclosed`**：旧版只判「整份文件里有没有未闭合的块」，
+    而**内层围栏提前截断外层块**这条缺陷它看不到 —— 旧版 `_fence_closes` 把
+    「长度相等」也当成闭合，于是下面这类模板整份文件仍算平衡、`failed=0`：
+
+        ```markdown      ← 外层（模板正文）
+        ```text         ← 内层示例
+        ```             ← 按 CommonMark 在这里就闭合了外层
+        …模板剩余 100 行…  ← 全落到围栏外
+        ```             ← 这行反而开启了第四个块，到文件尾都没闭合
+
+    判据用 **CommonMark 真规则**：闭合行必须**只由反引号组成、无 info string**，
+    且长度 >= 开围栏。凡是「块内出现**长度 >= 外层**的带 info 开围栏」，就是渲染破损 ——
+    它自己那一行的裸闭合行长度必然也 >= 外层，会先把**外层**关掉。
+    比外层短的嵌套（外层 4、内层 3）是合法的，不算缺陷。
+    修复方式固定：**外层开围栏用 4 个反引号**（`templates/_尽调结论模板.md` 原本就是这么做的）。
+    """
     unbalanced = []
     leaked = []
+    nested = []
     for f in md:
         text = read(f)
         # 配对检查: 走完后没有未闭合的块
@@ -233,10 +258,37 @@ def check_fences(md, rep):
         for lineno, line in outside_code_blocks(text):
             if LEAKED_LINE_RE.match(line):
                 leaked.append("%s:%d" % (f, lineno))
-    ok = not unbalanced and not leaked
+        # CommonMark 嵌套判据
+        lines = text.split("\n")
+        i = 0
+        while i < len(lines):
+            m = _CM_OPEN.match(lines[i])
+            if not m:
+                i += 1
+                continue
+            n = len(m.group(1))
+            j = i + 1
+            while j < len(lines):
+                c = _CM_CLOSE.match(lines[j])
+                if c and len(c.group(1)) >= n:
+                    break
+                j += 1
+            if j >= len(lines):
+                nested.append("%s:%d unclosed" % (f, i + 1))
+                break
+            # 块内出现**长度 >= 外层**且带 info 的开围栏 —— 它自己的裸闭合行
+            # 长度必然也 >= 外层，于是会先把**外层**关掉（这才是破损机制）。
+            # 比外层短的嵌套（外层 4、内层 3）是合法的，不算缺陷。
+            inner = [k + 1 for k in range(i + 1, j)
+                     if _CM_OPEN.match(lines[k]) and len(_CM_OPEN.match(lines[k]).group(1)) >= n]
+            if inner:
+                nested.append("%s:%d outer closed at %d, inner opens %s" % (
+                    f, i + 1, j + 1, inner[:4]))
+            i = j + 1
+    ok = not unbalanced and not leaked and not nested
     rep.add(ok, "fence-pairing",
-            "unbalanced=%s leaked_outside=%d %s" % (
-                unbalanced or "none", len(leaked), leaked[:8] if leaked else ""))
+            "unbalanced=%s leaked_outside=%d nested_and_unclosed=%d %s" % (
+                unbalanced or "none", len(leaked), len(nested), nested[:4] if nested else ""))
 
 
 def check_internal_dead_links(md, rep):

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Requires a POSIX shell (bash / zsh / git-bash) for the due-diligence probe commands in references/due-diligence.md; on Windows run them under git-bash, or substitute the equivalent PowerShell commands. Reading this skill requires no runtime; maintaining it (scripts/selfcheck.py) needs Python 3.
 metadata:
   author: xinchenXE(布耶尔)
-  version: "1.8.1"
+  version: "1.9.0"
 ---
 
 # buer-pro-max · 治理框架初始化（Governance Framework Bootstrap）
@@ -87,10 +87,13 @@ metadata:
 **③ 不做的后果**。
 
 **三段都要落到可比较的量上**；讲不出量，说明还没想清楚这条值不值。
-用户点头就做，不点头就跳过。**目前有两项**：
+用户点头就做，不点头就跳过。**目前有三项**：
 
 - `工作范式.md` §六「环境事实」一节
 - 会话交接件（`登记提示词/`，**标准档起的「第 8 件」推荐项**，不在 3/5/7 步数表内）
+- **头脑风暴询问位**（`_队列项模板` 的「拍板落档」节）：**默认关闭**，
+  唯一入口是**写计划时询问一次**，必须给建议与理由，用户拍板后才开；
+  用途仅限「更准确地找出或分析问题」。规则见 `references/work-discipline.md` §五
 
 ### 1.3 生成前的**强制门**（**逐项打勾才能进 §三**）
 
@@ -101,7 +104,7 @@ metadata:
 > **没打完勾就生成 = 流程违规**，产出的东西再好也不算数（`iron-rules.md` 铁律 ③ 同理）。
 
 - [ ] **六条提问**全部问过（探不到的才问，探到的不要问）
-- [ ] **两个推荐项**按三段格式说明过，且**用户已表态**（同意 / 跳过都要记）
+- [ ] **三个推荐项**按三段格式说明过，且**用户已表态**（同意 / 跳过都要记）
 - [ ] **`<GOV_ROOT>` 已定**（§3.0；用户指定或采用默认值，且已记录）
 - [ ] **命名方案已定**（中文 / 英文，见 `references/naming.md`）
 - [ ] **档位已判**，且「为什么不选更高档」有答案
@@ -296,6 +299,7 @@ prolab-main/
 | 门禁表怎么填、硬停清单怎么定 | `references/core/gates-and-holds.md` |
 | 文档同步纪律、规则载体多处同步、静默跳过=漏做 | `references/core/doc-sync-discipline.md` |
 | **踩过的坑与「为什么需要它」**（这是框架里最难自己长出来的部分） | `references/anti-patterns.md` |
+| **工作方法纪律**（代码评审 / TDD / 系统化调试 / 并行隔离 / 头脑风暴） | `references/work-discipline.md` |
 | 会话交接件（跨会话不失忆） | `references/session-handoff.md` |
 | **门禁脚本怎么实现**（文档基线同步 / 引用完整性 / 快照 / 走查包装的契约） | `references/tool-contracts.md` |
 | **哪些规则必选、哪些可选**（触发条件索引；生成时按它裁剪） | `references/mandatory-vs-optional.md` |

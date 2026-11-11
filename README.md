@@ -132,10 +132,16 @@ python scripts/selfcheck.py         # 可选（要有 Python 3）：必须 faile
 
 ### 5. 触发
 
-装好后在**新会话**里说 **「给这个项目建立治理」**、**「建立治理框架」**、
-**「bootstrap governance」**、**「set up a dev paradigm」** 等即可触发
-（完整触发词见 `SKILL.md` 的 `description`）。
+**调用一次就够。** 在**新会话**里执行 **`/buer-pro-max`**（Claude Code 的技能快捷方式），
+或直接说 **「启动buer-pro-max」** —— 技能加载后按它的问题往下答即可，
+**不需要再逐个说触发词**，也不需要重复调用。
 
+下面这些说法同样能触发（完整触发词见 `SKILL.md` 的 `description`）：
+「给这个项目建立治理」、「建立治理框架」、「bootstrap governance」、「set up a dev paradigm」。
+
+> **`/buer-pro-max` 只在支持技能快捷方式的宿主上可用**（Claude Code）。
+> 其他宿主用上面的说法，或直接把 `SKILL.md` 的 `description` 贴给 agent。
+>
 > **新装的 skill 可能要开新会话才生效** —— 宿主在会话启动时加载技能描述，
 > 已在跑的会话不会中途发现它。
 >
@@ -464,7 +470,7 @@ buer-pro-max/
 最小的一次完整运行，**产出只有一个文件**：
 
 ```
-你：给这个项目建立治理框架
+你：/buer-pro-max
 skill：（尽调）目录里只有 cli.py 一个源文件，140 行，没有 .git，没有测试…
         判档：微型档（1–2 个源文件 / 不打算回来维护）
         → 按 SKILL.md §三：「微型档只生成一份 NEXT.md，不生成 <GOV_ROOT>/」
@@ -486,7 +492,7 @@ skill：（尽调）目录里只有 cli.py 一个源文件，140 行，没有 .g
 ### 一个标准档项目的完整对话
 
 ```
-你：给这个项目建立治理框架
+你：/buer-pro-max
 skill：（尽调）探到 Node + pnpm，有 .git，无 submodule，src/ 4.2k 行…
         探不到的问你这六条提问
 你：不许改 vendor/ 和 dist/；回滚靠 git；只有我拍板；最怕改了不该改的
